@@ -343,7 +343,7 @@ class MatterbaseApp(App):
     }
 
     #preview-title {
-        height: 1;
+        height: auto;
         color: $accent;
         text-style: bold;
         margin-bottom: 1;
@@ -435,6 +435,7 @@ class MatterbaseApp(App):
         self._apex_theme: str = config.get("apex_theme", "")
         self._apex_width: int = config.get("apex_width", 0)
         self._apex_code_highlight: str = config.get("apex_code_highlight", "")
+        self._apex_code_highlight_theme: str = config.get("apex_code_highlight_theme", "")
         self._grubber_search_mode: str = config.get("grubber_search_mode", "all")
         self._grubber_array_fields: list[str] = config.get("array_fields", [])
         self._table_columns: list[str] = config.get("table_columns", [])
@@ -702,6 +703,8 @@ class MatterbaseApp(App):
         cmd = ["apex", render_path, "--plugins", "-t", "terminal256"]
         if self._apex_code_highlight:
             cmd += ["--code-highlight", self._apex_code_highlight]
+        if self._apex_code_highlight_theme:
+            cmd += ["--code-highlight-theme", self._apex_code_highlight_theme]
         if self._apex_theme:
             cmd += ["--theme", self._apex_theme]
         if self._apex_width:
@@ -756,6 +759,17 @@ class MatterbaseApp(App):
 
     async def action_quit(self) -> None:
         self.exit()
+
+    def _yank_command_display(self) -> str:
+        """Short display version: only active filters and nu query."""
+        parts = []
+        for query_list in self._active_queries:
+            for expr in query_list:
+                parts += ["-f", shlex.quote(expr)]
+        if self._table_nu_query.strip():
+            nu_query = self._table_nu_query.strip().replace("'", '"')
+            parts += ["|", "nu -c", f"'from json | {nu_query}'"]
+        return " ".join(parts) if parts else "(no filters)"
 
     def _copy_to_clipboard(self, text: str) -> None:
         """Copy text to the system clipboard (macOS, Wayland, X11)."""
@@ -852,6 +866,7 @@ class MatterbaseApp(App):
             if not tq.value and self._table_default_query:
                 tq.value = self._table_default_query
             self._table_nu_query = tq.value
+            self.query_one("#preview-title", Static).update(self._yank_command_display())
             self._populate_table()
         else:
             table.remove_class("visible")
@@ -1004,6 +1019,7 @@ class MatterbaseApp(App):
         """Move the DataTable cursor to the row matching path."""
         if not self._table_mode:
             return
+        self.query_one("#preview-title", Static).update(self._yank_command_display())
         idx = self._table_file_to_row_idx.get(path)
         if idx is not None:
             self.query_one("#meta-table", MetaDataTable).move_cursor(row=idx)
