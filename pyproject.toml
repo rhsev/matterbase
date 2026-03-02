@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "matterbase"
+version = "0.1.0"
+description = "Keyboard-driven terminal UI for browsing and filtering Markdown notes"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.80.0",
+    "pyyaml",
+    "rich",
+]
+
+[project.scripts]
+matterbase = "matterbase:main"
+
+[tool.setuptools.packages.find]
+# auto-discovers the 'matterbase' package
+
+[tool.setuptools.package-data]
+matterbase = ["vendor/*"]

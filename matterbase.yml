@@ -1,0 +1,20 @@
+notes_dir: ~/Notes
+editor: hx
+apex_theme: nord256
+grubber_search_mode: frontmatter
+
+filters:
+  - label: "active"
+    query:
+      - "status=active"
+
+  - label: "inbox"
+    query:
+      - "status=inbox"
+
+  - label: "test+active"
+    query:
+      - "project=test"
+      - "status=active"     # AND innerhalb eines Buttons
+
+multi_select: true
