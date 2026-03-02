@@ -1,8 +1,8 @@
 # matterbase
 
-A database-TUI for querying frontmatter and YAML in Markdown notes with field filters, full-text search, and table view. For macOS and Linux without Dataview.
+A database-like TUI for querying frontmatter and YAML in Markdown notes with field filters, full-text search, and table view. grubber and matterbase are designed to keep data and context together.
 
-Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](https://github.com/rhsev/grubber) for frontmatter-based filtering, [apex](https://github.com/ttscoff/apex) for preview rendering, and [nushell](https://www.nushell.sh) for table queries.
+Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](https://github.com/rhsev/grubber) for frontmatter-based filtering, [apex](https://github.com/ttscoff/apex) for preview rendering, and [nushell](https://www.nushell.sh) for table queries. For macOS and Linux.
 
 ![Compact preview mode](screenshot-compact-preview.png)
 *Note list with compact preview (`m`) showing only frontmatter and YAML blocks.*
@@ -137,3 +137,7 @@ Compact mode is useful for quickly scanning note metadata and task lists without
 Press `y` to copy the current grubber command (with active filters and optional nushell query) to the clipboard. `Y` does the same and then quits, printing the command to stdout — useful for piping matterbase into other tools.
 
 Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland, `xclip` or `xsel` on X11.
+
+## Architecture
+
+The design decisions behind this are explained in [ARCHITECTURE.md](ARCHITECTURE.md).
