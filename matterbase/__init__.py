@@ -10,8 +10,10 @@ Config file format (YAML):
   editor: hx                    # Editor to open notes with
   apex_theme: ralf              # apex theme name (optional)
   apex_code_highlight: pygments # apex --code-highlight tool: pygments (p) or skylighting (s); omit to disable
+  apex_code_highlight_theme: nord  # apex --code-highlight-theme (optional, tool-specific)
   compact_tasks_heading: Tasks  # h2 heading to include in compact preview (default: Tasks)
   grubber_search_mode: all      # "all" (default), "frontmatter", or "blocks_only"
+  grubber_mmd: false            # pass --mmd to grubber (MultiMarkdown metadata headers)
   array_fields: [tags, keywords] # passed as GRUBBER_ARRAY_FIELDS env var to grubber
   table_columns: [status, project, type]  # columns shown in table view (omit = all)
   table_query: "where status != 'archive'"  # default nushell query for table (optional)
@@ -138,6 +140,7 @@ def run_grubber(
     expressions: list[str] | None = None,
     search_mode: str = "all",
     array_fields: list[str] | None = None,
+    mmd: bool = False,
 ) -> list[str]:
     """
     Call grubber to get matching file paths.
@@ -152,6 +155,8 @@ def run_grubber(
     """
     def base_cmd(flag: str) -> list[str]:
         cmd = [GRUBBER_BIN, "extract", notes_dir, flag]
+        if mmd:
+            cmd.append("--mmd")
         if expressions:
             for expr in expressions:
                 cmd.extend(["-f", expr])
@@ -182,6 +187,7 @@ def query_files(
     multi_select: bool,
     search_mode: str = "all",
     array_fields: list[str] | None = None,
+    mmd: bool = False,
 ) -> list[str]:
     """
     Resolve the file list based on active button queries.
@@ -194,7 +200,7 @@ def query_files(
     With a single button active (or multi_select=False): merge all expressions
     into one grubber call.
     """
-    kw = dict(search_mode=search_mode, array_fields=array_fields)
+    kw = dict(search_mode=search_mode, array_fields=array_fields, mmd=mmd)
 
     if not active_queries:
         return run_grubber(notes_dir, **kw)
@@ -437,6 +443,7 @@ class MatterbaseApp(App):
         self._apex_code_highlight: str = config.get("apex_code_highlight", "")
         self._apex_code_highlight_theme: str = config.get("apex_code_highlight_theme", "")
         self._grubber_search_mode: str = config.get("grubber_search_mode", "all")
+        self._grubber_mmd: bool = bool(config.get("grubber_mmd", False))
         self._grubber_array_fields: list[str] = config.get("array_fields", [])
         self._table_columns: list[str] = config.get("table_columns", [])
         self._table_default_query: str = config.get("table_query", "")
@@ -486,6 +493,7 @@ class MatterbaseApp(App):
             self.multi_select,
             search_mode=self._grubber_search_mode,
             array_fields=self._grubber_array_fields,
+            mmd=self._grubber_mmd,
         )
         self._apply_search()
 
@@ -794,6 +802,8 @@ class MatterbaseApp(App):
             parts.append("--blocks-only")
         else:
             parts.append("--all")
+        if self._grubber_mmd:
+            parts.append("--mmd")
         for query_list in self._active_queries:
             for expr in query_list:
                 parts += ["-f", shlex.quote(expr)]
@@ -888,6 +898,8 @@ class MatterbaseApp(App):
             cmd = [GRUBBER_BIN, "extract", self.notes_dir]
             if flag:
                 cmd.append(flag)
+            if self._grubber_mmd:
+                cmd.append("--mmd")
             return cmd
 
         if self._grubber_search_mode == "frontmatter":
