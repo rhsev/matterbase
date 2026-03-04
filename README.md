@@ -118,7 +118,10 @@ where status == "active"
 where start > "2025-01-01"
 where status == "active" | select file status project
 sort-by start --reverse
+sort-by { $in._note_file | path basename }
 ```
+
+The file column in the table shows only the filename, but in nushell queries the full path is available as `_note_file`. Use `path basename` to sort by filename.
 
 The table cursor follows the file list selection. Press `t` again to return to preview mode.
 
