@@ -116,6 +116,35 @@ def load_config(config_path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# MMD header parsing
+# ---------------------------------------------------------------------------
+
+_MMD_KEY_RE = re.compile(r'^[\w. -]+\s*:')
+
+def _split_mmd_header(content: str) -> tuple[str, str]:
+    """If content starts with MMD key: value pairs, return (yaml_lines, body).
+
+    MMD headers are key: value lines at the very start of the file,
+    terminated by the first blank line. Returns ("", content) if none found.
+    """
+    lines = content.split("\n")
+    mmd_lines: list[str] = []
+    for line in lines:
+        if not line.strip():
+            break
+        if _MMD_KEY_RE.match(line):
+            mmd_lines.append(line)
+        else:
+            break
+    if not mmd_lines:
+        return "", content
+    rest_start = len(mmd_lines)
+    if rest_start < len(lines) and not lines[rest_start].strip():
+        rest_start += 1
+    return "\n".join(mmd_lines), "\n".join(lines[rest_start:])
+
+
+# ---------------------------------------------------------------------------
 # grubber integration
 # ---------------------------------------------------------------------------
 
@@ -634,12 +663,17 @@ class MatterbaseApp(App):
         parts: list[str] = []
         body = content
 
-        # 1. Frontmatter
+        # 1. Frontmatter (YAML) or MMD metadata headers
         if content.startswith("---"):
             sections = content.split("---", 2)
             if len(sections) >= 3:
                 parts.append(f"---{sections[1]}---")
                 body = sections[2]
+        elif self._grubber_mmd:
+            mmd_yaml, mmd_body = _split_mmd_header(content)
+            if mmd_yaml:
+                parts.append(f"---\n{mmd_yaml}\n---")
+                body = mmd_body
 
         lines = body.splitlines()
 
@@ -693,7 +727,7 @@ class MatterbaseApp(App):
         preview = self.query_one("#preview", Static)
         title.update(os.path.basename(path))
 
-        # In compact mode, write extracted content to a tempfile and pass it to apex
+        # Prepare tempfile for apex: compact mode, or MMD files (converted to YAML frontmatter)
         tmp_path: str | None = None
         if self._compact_preview:
             compact = self._extract_compact_content(path)
@@ -706,7 +740,6 @@ class MatterbaseApp(App):
                         tmp_path = f.name
                 except OSError:
                     tmp_path = None
-
         render_path = tmp_path if tmp_path else path
         cmd = ["apex", render_path, "--plugins", "-t", "terminal256"]
         if self._apex_code_highlight:
@@ -748,6 +781,11 @@ class MatterbaseApp(App):
                     fm = parts[1].rstrip("\n")
                     body = parts[2].lstrip("\n")
                     preview.update(f"[dim]---\n{fm}\n---[/dim]\n\n{body}")
+                    return
+            if self._grubber_mmd:
+                mmd_yaml, mmd_body = _split_mmd_header(content)
+                if mmd_yaml:
+                    preview.update(f"[dim]---\n{mmd_yaml}\n---[/dim]\n\n{mmd_body}")
                     return
             preview.update(content)
 
