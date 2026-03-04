@@ -144,3 +144,7 @@ Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland, `x
 ## Architecture
 
 The design decisions behind this are explained in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## nushell query reference
+
+Common queries and known limitations: [NU-QUERIES.md](NU-QUERIES.md).
