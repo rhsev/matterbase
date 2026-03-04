@@ -1008,9 +1008,10 @@ class MatterbaseApp(App):
                     if isinstance(parsed, dict):
                         parsed = [parsed]
                     if not isinstance(parsed, list):
-                        # Scalar result (e.g. from `length`) — show in status bar
-                        self.query_one("#status", Static).update(f" {parsed}")
-                        self._render_table(data)
+                        # Scalar result — not renderable as table
+                        self.query_one("#status", Static).update(
+                            f" [yellow]Query result is not a table:[/yellow] {parsed}"
+                        )
                         return
                     data = parsed
                 else:
@@ -1040,7 +1041,7 @@ class MatterbaseApp(App):
         table.clear(columns=True)
         self._table_file_to_row_idx = {}
 
-        if not data:
+        if not isinstance(data, list) or not data:
             return
 
         # Collect field names, optionally restricted to table_columns
