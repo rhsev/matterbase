@@ -59,6 +59,8 @@ get type | uniq | sort
 
 ## Count
 
+Scalar results like `length` are shown in the status bar, not as a table:
+
 ```nu
 length
 where status == "active" | length

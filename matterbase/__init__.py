@@ -1007,6 +1007,11 @@ class MatterbaseApp(App):
                     parsed = json.loads(result.stdout)
                     if isinstance(parsed, dict):
                         parsed = [parsed]
+                    if not isinstance(parsed, list):
+                        # Scalar result (e.g. from `length`) — show in status bar
+                        self.query_one("#status", Static).update(f" {parsed}")
+                        self._render_table(data)
+                        return
                     data = parsed
                 else:
                     # Show first non-empty error line in status bar
