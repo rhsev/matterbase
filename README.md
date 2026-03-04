@@ -111,7 +111,7 @@ Fulltext search behaviour:
 
 Press `t` to switch the right pane from preview to a metadata table. The table shows frontmatter fields for all currently visible notes.
 
-A nushell query field appears below the file list. Type any nushell pipeline fragment and press `ctrl+r` to filter the table:
+A nushell query field appears below the file list. Type any nushell pipeline fragment and press `ctrl+r` to filter the table. nushell does not need to be running — matterbase calls it in the background:
 
 ```
 where status == "active"
