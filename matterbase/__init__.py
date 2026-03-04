@@ -576,7 +576,7 @@ class MatterbaseApp(App):
                 if truncated:
                     self.call_from_thread(
                         lambda: self.query_one("#status", Static).update(
-                            f" {max_results}+ Treffer – Suche verfeinern  │  {notes_dir}"
+                            f" {max_results}+ matches – refine search term  │  {notes_dir}"
                         )
                     )
 

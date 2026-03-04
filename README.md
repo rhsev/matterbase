@@ -104,14 +104,13 @@ meeting          →  filename contains "meeting"
 Fulltext search behaviour:
 
 - Starts after **3 characters** (shorter terms match too broadly)
-- Stops collecting results after **25 matches** — refine the term if you see "25+ Treffer"
-- Debounced by **200 ms**: the search fires only after you pause typing
+- Stops collecting results after **25 matches**. Refine the term if you see "25+ matches"
 
 ## Metadata table (`t`)
 
 Press `t` to switch the right pane from preview to a metadata table. The table shows frontmatter fields for all currently visible notes.
 
-A nushell query field appears below the file list. Type any nushell pipeline fragment and press `ctrl+r` to filter the table. nushell does not need to be running — matterbase calls it in the background:
+A nushell query field appears below the file list. Type any nushell pipeline fragment and press `ctrl+r` to filter the table. nushell does not need to be running, matterbase calls it in the background:
 
 ```
 where status == "active"
@@ -124,6 +123,8 @@ sort-by { $in._note_file | path basename }
 The file column in the table shows only the filename, but in nushell queries the full path is available as `_note_file`. Use `path basename` to sort by filename.
 
 The table cursor follows the file list selection. Press `t` again to return to preview mode.
+
+See [NU-QUERIES.md](NU-QUERIES.md) for a query reference and known limitations.
 
 ## Compact preview (`m`)
 
@@ -145,6 +146,3 @@ Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland, `x
 
 The design decisions behind this are explained in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## nushell query reference
-
-Common queries and known limitations: [NU-QUERIES.md](NU-QUERIES.md).
