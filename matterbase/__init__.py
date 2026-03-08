@@ -85,8 +85,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, ScrollableContainer
 from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Static
-from textual.reactive import reactive
-
 
 # ---------------------------------------------------------------------------
 # Config
@@ -171,17 +169,7 @@ def run_grubber(
     array_fields: list[str] | None = None,
     mmd: bool = False,
 ) -> list[str]:
-    """
-    Call grubber to get matching file paths.
-
-    search_mode:
-      "all"          – --all (frontmatter + YAML blocks, overrides user config)
-      "frontmatter"  – --frontmatter-only
-      "blocks_only"  – --blocks-only
-
-    array_fields is passed as GRUBBER_ARRAY_FIELDS env var.
-    CLI flags always override any global grubber config.
-    """
+    """Run grubber and return deduplicated matching file paths."""
     def base_cmd(flag: str) -> list[str]:
         cmd = [GRUBBER_BIN, "extract", notes_dir, flag]
         if mmd:
@@ -218,17 +206,7 @@ def query_files(
     array_fields: list[str] | None = None,
     mmd: bool = False,
 ) -> list[str]:
-    """
-    Resolve the file list based on active button queries.
-
-    Each entry in active_queries is a list of grubber filter expressions
-    belonging to one button (AND within the button).
-
-    With multi_select AND multiple active buttons: run grubber once per button
-    query and AND-intersect the result sets.
-    With a single button active (or multi_select=False): merge all expressions
-    into one grubber call.
-    """
+    """Return file list for active filter buttons; multiple buttons AND-intersect."""
     kw = dict(search_mode=search_mode, array_fields=array_fields, mmd=mmd)
 
     if not active_queries:
@@ -355,19 +333,21 @@ class MatterbaseApp(App):
         background: #2E3440;
     }
 
+    #search:focus {
+        border: solid $accent;
+    }
+
     #file-list {
         height: 1fr;
         border: solid #D8DEE9;
         background: #2E3440;
     }
 
-    /* ── Right pane ────────────────────────────────────────────────── */
-    #right {
-        width: 65%;
-        height: 100%;
-        padding: 0 1;
+    #file-list:focus {
+        border: solid $accent;
     }
 
+    /* ── Right pane ────────────────────────────────────────────────── */
     #right.hidden {
         display: none;
     }
@@ -390,6 +370,10 @@ class MatterbaseApp(App):
         background: #2E3440;
     }
 
+    #preview-scroll:focus {
+        border: solid $accent;
+    }
+
     #preview-scroll.hidden {
         display: none;
     }
@@ -403,6 +387,10 @@ class MatterbaseApp(App):
         height: 3;
         border: solid #D8DEE9;
         background: #2E3440;
+    }
+
+    #table-query:focus {
+        border: solid $accent;
     }
 
     #table-query.visible {
