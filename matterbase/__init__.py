@@ -627,7 +627,9 @@ class MatterbaseApp(App):
             self._fulltext_timer = self.set_timer(delay, self._apply_search)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "table-query":
+        if event.input.id == "search":
+            self.query_one("#file-list", NoteListView).focus()
+        elif event.input.id == "table-query":
             self._table_nu_query = event.value
             self._apply_table_query()
 
