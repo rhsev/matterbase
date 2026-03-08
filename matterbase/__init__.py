@@ -168,10 +168,13 @@ def run_grubber(
     search_mode: str = "all",
     array_fields: list[str] | None = None,
     mmd: bool = False,
+    depth: int | None = None,
 ) -> list[str]:
     """Run grubber and return deduplicated matching file paths."""
     def base_cmd(flag: str) -> list[str]:
         cmd = [GRUBBER_BIN, "extract", notes_dir, flag]
+        if depth is not None:
+            cmd += ["--depth", str(depth)]
         if mmd:
             cmd.append("--mmd")
         if expressions:
@@ -205,9 +208,10 @@ def query_files(
     search_mode: str = "all",
     array_fields: list[str] | None = None,
     mmd: bool = False,
+    depth: int | None = None,
 ) -> list[str]:
     """Return file list for active filter buttons; multiple buttons AND-intersect."""
-    kw = dict(search_mode=search_mode, array_fields=array_fields, mmd=mmd)
+    kw = dict(search_mode=search_mode, array_fields=array_fields, mmd=mmd, depth=depth)
 
     if not active_queries:
         return run_grubber(notes_dir, **kw)
@@ -462,6 +466,7 @@ class MatterbaseApp(App):
         self._grubber_search_mode: str = config.get("grubber_search_mode", "all")
         self._grubber_mmd: bool = bool(config.get("grubber_mmd", False))
         self._grubber_array_fields: list[str] = config.get("array_fields", [])
+        self._grubber_depth: int | None = config.get("depth")
         self._table_columns: list[str] = config.get("table_columns", [])
         self._table_default_query: str = config.get("table_query", "")
         self._table_raw_data: list[dict] = []   # grubber records before nu filtering
@@ -511,6 +516,7 @@ class MatterbaseApp(App):
             search_mode=self._grubber_search_mode,
             array_fields=self._grubber_array_fields,
             mmd=self._grubber_mmd,
+            depth=self._grubber_depth,
         )
         self._apply_search()
 
@@ -830,6 +836,8 @@ class MatterbaseApp(App):
             parts.append("--blocks-only")
         else:
             parts.append("--all")
+        if self._grubber_depth is not None:
+            parts += ["--depth", str(self._grubber_depth)]
         if self._grubber_mmd:
             parts.append("--mmd")
         for query_list in self._active_queries:
@@ -1088,9 +1096,30 @@ def main() -> None:
         metavar="CONFIG.YML",
         help="Path to YAML config file (see --help for format)",
     )
+    parser.add_argument(
+        "path",
+        nargs="?",
+        metavar="PATH",
+        help="File or directory to browse (overrides notes_dir from config)",
+    )
+    parser.add_argument(
+        "--depth",
+        type=int,
+        metavar="N",
+        default=None,
+        help="Limit directory recursion depth (0 = root only)",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.path:
+        p = Path(args.path).expanduser().resolve()
+        if not p.exists():
+            print(f"Error: path not found: {p}", file=sys.stderr)
+            sys.exit(1)
+        config["notes_dir"] = str(p)
+    if args.depth is not None:
+        config["depth"] = args.depth
     result = MatterbaseApp(config).run()
     if result:
         print(result)
