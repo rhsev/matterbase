@@ -830,7 +830,9 @@ class MatterbaseApp(App):
     def _build_yank_command(self) -> str:
         """Reconstruct the current grubber [| nu] command from app state."""
         parts = [GRUBBER_BIN, "extract", self.notes_dir]
-        if self._grubber_search_mode == "frontmatter":
+        if self._table_mode:
+            parts.append("--all")
+        elif self._grubber_search_mode == "frontmatter":
             parts.append("--frontmatter-only")
         elif self._grubber_search_mode == "blocks_only":
             parts.append("--blocks-only")
@@ -848,7 +850,7 @@ class MatterbaseApp(App):
             cmd = f"GRUBBER_ARRAY_FIELDS={','.join(self._grubber_array_fields)} {cmd}"
         if self._table_nu_query.strip():
             nu_query = self._table_nu_query.strip().replace("'", '"')
-            cmd += f" | nu --stdin -c 'from json | {nu_query}'"
+            cmd += f" | nu --stdin -c 'from json | {nu_query} | to tsv'"
         return cmd
 
     def action_yank(self) -> None:
