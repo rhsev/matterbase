@@ -8,7 +8,7 @@ Markdown notes with frontmatter/YAML are a lightweight alternative to dedicated 
 
 matterbase puts a TUI in front of that. You pick filters by pressing buttons, refine with a search field, and the matching notes appear immediately. When you have what you want, press `y` to copy the underlying grubber command — ready to pipe into other tools.
 
-A typical workflow: filter your notes by `type=contact`, then add a nushell query like `select file name birthday | sort-by birthday` to get a birthday list. The yanked command always ends with `| to tsv`, so appending `> birthday.tsv` gives you a clean spreadsheet-ready file.
+A typical workflow: filter your notes by `type=contact`, then add a nushell query like `select _note_file name birthday | sort-by birthday` to get a birthday list. The yanked command always ends with `| to tsv`, so appending `> birthday.tsv` gives you a clean spreadsheet-ready file.
 
 Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](https://github.com/rhsev/grubber) for frontmatter-based filtering, [apex](https://github.com/ttscoff/apex) for preview rendering, and [nushell](https://www.nushell.sh) for table queries. For macOS and Linux.
 
