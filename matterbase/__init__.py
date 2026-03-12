@@ -829,7 +829,7 @@ class MatterbaseApp(App):
 
     def _build_yank_command(self) -> str:
         """Reconstruct the current grubber [| nu] command from app state."""
-        parts = [GRUBBER_BIN, "extract", self.notes_dir]
+        parts = [shlex.quote(GRUBBER_BIN), "extract", shlex.quote(self.notes_dir)]
         if self._table_mode:
             parts.append("--all")
         elif self._grubber_search_mode == "frontmatter":
