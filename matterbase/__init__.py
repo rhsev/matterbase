@@ -810,7 +810,7 @@ class MatterbaseApp(App):
                 parts += ["-f", shlex.quote(expr)]
         if self._table_nu_query.strip():
             nu_query = self._table_nu_query.strip().replace("'", '"')
-            parts += ["|", "nu -c", f"'from json | {nu_query}'"]
+            parts += ["|", "nu --stdin -c", f"'from json | {nu_query}'"]
         return " ".join(parts) if parts else "(no filters)"
 
     def _copy_to_clipboard(self, text: str) -> None:
@@ -848,7 +848,7 @@ class MatterbaseApp(App):
             cmd = f"GRUBBER_ARRAY_FIELDS={','.join(self._grubber_array_fields)} {cmd}"
         if self._table_nu_query.strip():
             nu_query = self._table_nu_query.strip().replace("'", '"')
-            cmd += f" | nu -c 'from json | {nu_query}'"
+            cmd += f" | nu --stdin -c 'from json | {nu_query}'"
         return cmd
 
     def action_yank(self) -> None:
