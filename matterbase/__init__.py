@@ -1057,7 +1057,10 @@ class MatterbaseApp(App):
         if self._table_columns:
             all_keys = [k for k in all_keys if k in self._table_columns]
 
-        table.add_column("file", key="file")
+        # Drop columns where every value is None
+        all_keys = [k for k in all_keys if any(record.get(k) is not None for record in data)]
+
+        table.add_column("_note_file", key="file")
         for k in all_keys:
             table.add_column(k, key=k)
 
