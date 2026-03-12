@@ -1014,6 +1014,7 @@ class MatterbaseApp(App):
                         )
                         return
                     data = parsed
+                    self.query_one("#status", Static).update("")
                 else:
                     # Show first non-empty error line in status bar
                     stderr = result.stderr.strip()
