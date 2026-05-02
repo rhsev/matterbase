@@ -64,6 +64,13 @@ import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# grubber error capture (written by _run_grubber_cmd, read by the app)
+# ---------------------------------------------------------------------------
+
+_grubber_last_error: str = ""
+_grubber_last_cmd: list[str] = []
+
+# ---------------------------------------------------------------------------
 # Bundled grubber binary / config resolution
 # ---------------------------------------------------------------------------
 
@@ -148,17 +155,30 @@ def _split_mmd_header(content: str) -> tuple[str, str]:
 
 def _run_grubber_cmd(cmd: list[str], array_fields: list[str] | None = None) -> list[dict]:
     """Run a grubber command and return parsed JSON records."""
+    global _grubber_last_error, _grubber_last_cmd
+    _grubber_last_cmd = cmd
+    _grubber_last_error = ""
     env = os.environ.copy()
     if array_fields:
         env["GRUBBER_ARRAY_FIELDS"] = ",".join(array_fields)
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15, env=env)
         if result.returncode != 0:
+            _grubber_last_error = result.stderr.strip() or f"exit {result.returncode}"
             return []
-        return json.loads(result.stdout)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            _grubber_last_error = f"JSON parse error: {e}"
+            return []
     except subprocess.TimeoutExpired:
+        _grubber_last_error = "timeout after 15 s"
         return []
-    except (json.JSONDecodeError, FileNotFoundError, OSError):
+    except FileNotFoundError:
+        _grubber_last_error = f"command not found: {shlex.quote(cmd[0])}"
+        return []
+    except OSError as e:
+        _grubber_last_error = str(e)
         return []
 
 
@@ -519,6 +539,27 @@ class MatterbaseApp(App):
             depth=self._grubber_depth,
         )
         self._apply_search()
+        if not self._all_files:
+            self._show_empty_diagnostic()
+
+    def _show_empty_diagnostic(self) -> None:
+        """Show grubber command and any error in the preview pane when no notes are found."""
+        cmd_str = " ".join(shlex.quote(c) for c in _grubber_last_cmd)
+        if _grubber_last_error:
+            msg = (
+                f"[bold red]grubber error:[/bold red] {_grubber_last_error}\n\n"
+                f"[dim]Command:[/dim]\n  {cmd_str}"
+            )
+        else:
+            msg = (
+                "[dim]No notes found — grubber returned 0 results.[/dim]\n\n"
+                f"[dim]Command:[/dim]\n  {cmd_str}\n\n"
+                "[dim]Run this command in a terminal to verify grubber output.[/dim]"
+            )
+        try:
+            self.query_one("#preview", Static).update(msg)
+        except Exception:
+            pass
 
     def _apply_search(self) -> None:
         """Filter _all_files by search term.
@@ -542,7 +583,7 @@ class MatterbaseApp(App):
             if len(term) < self.FULLTEXT_MIN_CHARS:
                 self._rebuild_list(self._all_files)
                 self.query_one("#status", Static).update(
-                    f" Volltext: mindestens {self.FULLTEXT_MIN_CHARS} Zeichen  │  {self.notes_dir}"
+                    f" Fulltext: {self.FULLTEXT_MIN_CHARS}+ chars required  │  {self.notes_dir}"
                 )
                 return
 
@@ -1118,6 +1159,23 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_config(args.config)
+
+    # Verify grubber is actually executable before launching the TUI
+    try:
+        probe = subprocess.run(
+            [GRUBBER_BIN, "--version"], capture_output=True, timeout=5
+        )
+    except FileNotFoundError:
+        print(f"Error: grubber binary not found: {GRUBBER_BIN}", file=sys.stderr)
+        print("Install grubber or make sure it is on PATH.", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print(f"Error: grubber binary timed out: {GRUBBER_BIN}", file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error: could not run grubber ({GRUBBER_BIN}): {e}", file=sys.stderr)
+        sys.exit(1)
+
     if args.path:
         p = Path(args.path).expanduser().resolve()
         if not p.exists():
