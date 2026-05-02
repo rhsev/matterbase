@@ -62,7 +62,7 @@ Markdown remains the source of truth.
 
 ### grubber (Extraction Engine)
 
-**Language:** Crystal
+**Language:** Go
 **Role:** Fast metadata extraction and coarse filtering
 
 Responsibilities:
@@ -74,7 +74,7 @@ Responsibilities:
 
 Performance characteristics:
 
-- ~10,000 files in < 0.2 seconds (Crystal, multi-threaded)
+- ~10,000 files in < 0.2 seconds (Go, multi-threaded)
 - No persistent index
 - Stateless execution
 
