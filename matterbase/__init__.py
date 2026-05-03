@@ -163,7 +163,7 @@ def _run_grubber_cmd(cmd: list[str], array_fields: list[str] | None = None) -> l
     if array_fields:
         env["GRUBBER_ARRAY_FIELDS"] = ",".join(array_fields)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15, env=env)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=15, env=env)
         if result.returncode != 0:
             _grubber_last_error = result.stderr.strip() or f"exit {result.returncode}"
             return []
