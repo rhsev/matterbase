@@ -52,6 +52,7 @@ Keybindings:
 """
 
 import argparse
+import datetime
 import json
 import os
 import platform
@@ -1184,6 +1185,38 @@ def main() -> None:
         config["notes_dir"] = str(p)
     if args.depth is not None:
         config["depth"] = args.depth
+
+    # Write startup log (overwritten on each run)
+    import textual
+    log_path = Path.home() / ".matterbase.log"
+    grubber_version = probe.stdout.decode().strip() if probe.returncode == 0 else "unknown"
+    initial_files = query_files(
+        config["notes_dir"],
+        [],
+        False,
+        search_mode=config.get("grubber_search_mode", "all"),
+        array_fields=config.get("array_fields") or [],
+        mmd=bool(config.get("grubber_mmd", False)),
+        depth=config.get("depth"),
+    )
+    try:
+        with open(log_path, "w") as lf:
+            lf.write(f"timestamp: {datetime.datetime.now().isoformat()}\n")
+            lf.write(f"matterbase version: 0.1.0\n")
+            lf.write(f"python: {sys.version}\n")
+            lf.write(f"platform: {platform.platform()}\n")
+            lf.write(f"textual: {textual.__version__}\n")
+            lf.write(f"config: {args.config}\n")
+            lf.write(f"notes_dir: {config['notes_dir']}\n")
+            lf.write(f"grubber: {GRUBBER_BIN}\n")
+            lf.write(f"grubber version: {grubber_version}\n")
+            lf.write(f"grubber cmd: {' '.join(shlex.quote(c) for c in _grubber_last_cmd)}\n")
+            lf.write(f"files found: {len(initial_files)}\n")
+            if _grubber_last_error:
+                lf.write(f"grubber error: {_grubber_last_error}\n")
+    except OSError:
+        pass
+
     result = MatterbaseApp(config).run()
     if result:
         print(result)
