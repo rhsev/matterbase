@@ -51,6 +51,8 @@ Keybindings:
   Escape / q  Quit
 """
 
+__version__ = "0.1.2"
+
 import argparse
 import datetime
 import json
@@ -88,6 +90,7 @@ def _grubber_binary() -> str:
 GRUBBER_BIN = _grubber_binary()
 
 import yaml
+from rich.markup import escape as markup_escape
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -816,16 +819,16 @@ class MatterbaseApp(App):
             if content.startswith("---"):
                 parts = content.split("---", 2)
                 if len(parts) >= 3:
-                    fm = parts[1].rstrip("\n")
+                    fm = parts[1].strip("\n")
                     body = parts[2].lstrip("\n")
-                    preview.update(f"[dim]---\n{fm}\n---[/dim]\n\n{body}")
+                    preview.update(f"[dim]---\n{markup_escape(fm)}\n---[/dim]\n\n{markup_escape(body)}")
                     return
             if self._grubber_mmd:
                 mmd_yaml, mmd_body = _split_mmd_header(content)
                 if mmd_yaml:
-                    preview.update(f"[dim]---\n{mmd_yaml}\n---[/dim]\n\n{mmd_body}")
+                    preview.update(f"[dim]---\n{markup_escape(mmd_yaml)}\n---[/dim]\n\n{markup_escape(mmd_body)}")
                     return
-            preview.update(content)
+            preview.update(markup_escape(content))
 
     # ── Actions ───────────────────────────────────────────────────────
 
@@ -1151,6 +1154,11 @@ def main() -> None:
         help="File or directory to browse (overrides notes_dir from config)",
     )
     parser.add_argument(
+        "--version",
+        action="version",
+        version=f"matterbase {__version__}",
+    )
+    parser.add_argument(
         "--depth",
         type=int,
         metavar="N",
@@ -1202,7 +1210,7 @@ def main() -> None:
     try:
         with open(log_path, "w") as lf:
             lf.write(f"timestamp: {datetime.datetime.now().isoformat()}\n")
-            lf.write(f"matterbase version: 0.1.1\n")
+            lf.write(f"matterbase version: {__version__}\n")
             lf.write(f"python: {sys.version}\n")
             lf.write(f"platform: {platform.platform()}\n")
             lf.write(f"textual: {textual.__version__}\n")

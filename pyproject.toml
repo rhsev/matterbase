@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "matterbase"
-version = "0.1.1"
+version = "0.1.2"
 description = "Keyboard-driven terminal UI for browsing and filtering Markdown notes"
 requires-python = ">=3.10"
 dependencies = [
