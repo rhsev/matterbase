@@ -1202,7 +1202,7 @@ def main() -> None:
     try:
         with open(log_path, "w") as lf:
             lf.write(f"timestamp: {datetime.datetime.now().isoformat()}\n")
-            lf.write(f"matterbase version: 0.1.0\n")
+            lf.write(f"matterbase version: 0.1.1\n")
             lf.write(f"python: {sys.version}\n")
             lf.write(f"platform: {platform.platform()}\n")
             lf.write(f"textual: {textual.__version__}\n")

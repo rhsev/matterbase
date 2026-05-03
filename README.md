@@ -28,7 +28,7 @@ Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](http
 ## Installation
 
 ```
-pipx install git+https://github.com/rhsev/matterbase
+pipx install matterbase
 ```
 
 Updates:
