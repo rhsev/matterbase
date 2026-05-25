@@ -11,13 +11,11 @@ The system is intentionally built as a layered, stateless architecture:
 ```
 Markdown files
       ↓
-  grubber (fast extraction + coarse filtering)
-      ↓
-  JSON records
+  grubber (fast extraction + coarse filtering, NDJSON stream)
       ↓
   matterbase (TUI)
       ↓
-  optional nushell query
+  optional DuckDB SQL WHERE clause
       ↓
   table view or reconstructed CLI command
 ```
@@ -62,21 +60,27 @@ Markdown remains the source of truth.
 
 ### grubber (Extraction Engine)
 
-**Language:** Crystal
+**Language:** Go  
+**Version:** 0.8.1  
 **Role:** Fast metadata extraction and coarse filtering
 
 Responsibilities:
 
-- Scan directory tree
+- Scan directory tree (multi-threaded)
 - Extract frontmatter and YAML blocks
 - Apply simple filter expressions
-- Emit JSON
+- Emit JSON or NDJSON
 
 Performance characteristics:
 
-- ~10,000 files in < 0.2 seconds (Crystal, multi-threaded)
+- Full scan of large note collections in well under one second on local SSD
 - No persistent index
 - Stateless execution
+
+grubber supports two output modes:
+
+- **JSON** — full array, used for multi-button AND-intersect queries
+- **NDJSON** — one record per line as files are processed, used for the standard file list (non-blocking, streamed into the UI via a background worker)
 
 Instead of maintaining a database or incremental index, grubber performs a full scan on each invocation. Due to native compilation and efficient parsing, the scan cost remains low enough to avoid indexing complexity.
 
@@ -89,14 +93,24 @@ Advantages:
 
 ### matterbase (Terminal UI)
 
-**Language:** Python
-**Framework:** Textual
+**Language:** Python 3.10+  
+**Framework:** Textual  
 **Role:** Interactive exploration layer
+
+Module structure:
+
+| Module | Responsibility |
+|---|---|
+| `grubber_client.py` | grubber subprocess integration, NDJSON streaming, no Textual dependency |
+| `content.py` | MMD parsing, PDF/DOCX extraction, Markdown section helpers, apex rendering |
+| `widgets.py` | Reusable Textual widgets (FilterButton, NoteItem, NoteListView, MetaDataTable) |
+| `app.py` | MatterbaseApp, layout, event handlers, config loading, CLI entry point |
+| `__init__.py` | Re-export shim |
 
 Responsibilities:
 
 - Manage filter buttons
-- Trigger grubber calls
+- Trigger grubber calls (streaming via background worker)
 - Maintain visible file subset
 - Provide preview pane
 - Provide metadata table view
@@ -106,43 +120,60 @@ matterbase does not store data persistently. All state is ephemeral and derived 
 
 - Current filesystem
 - Active filters
-- Optional nushell query
+- Optional SQL WHERE clause
 
 Layout:
 
 - Left panel: list of files identified by grubber as containing frontmatter or YAML blocks
-- Right panel: either a Markdown preview, or a table of data records derived from those files
+- Middle panel: metadata table (toggleable)
+- Right panel: file preview or YAML block context
 
 Since a single file can produce multiple records (one per YAML block combined with frontmatter), the record count in the table view does not necessarily match the file count.
 
-### nushell (Query Layer)
+### DuckDB (Query Layer)
 
-**Role:** Fine-grained filtering and projection
+**Role:** Fine-grained filtering and projection within the table view
 
-After grubber reduces the candidate set, nushell is optionally applied for:
+After grubber reduces the candidate set, an optional SQL WHERE clause is applied via DuckDB for:
 
-- `where` conditions
-- sorting
-- projection
-- column selection
-- complex filtering
+- field conditions (`status != 'archive'`)
+- comparisons (`amount > 1000`)
+- null checks (`end IS NOT NULL`)
+
+The user types the WHERE clause directly (without the `WHERE` keyword). DuckDB executes:
+
+```sql
+SELECT * FROM read_json_auto('data.json') WHERE <clause>
+```
 
 This enforces a two-phase query strategy:
 
 1. Cheap structural filter (grubber)
-2. Expressive record-level query (nushell)
+2. Expressive record-level query (DuckDB SQL)
 
-This mirrors classical query planning: reduce dataset early, apply heavier transformations later.
+The reconstructed CLI command (yank) reflects the full pipeline:
+
+```
+grubber extract … | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE …"
+```
 
 ## Preview Architecture
 
-The preview system renders Markdown via a terminal renderer with plugin support.
+The preview system renders content via multiple renderers depending on file type:
 
-On demand, preview can be reduced to structured components only:
+| Type | Renderer |
+|---|---|
+| `.md` | apex (Markdown, terminal256) |
+| `.pdf` | pypdf (text extraction) |
+| `.docx` | python-docx (text + headings) |
+| code / text | bat (syntax highlighting) |
+| fallback | raw content with dimmed frontmatter |
 
-- frontmatter
-- YAML blocks
-- TaskPaper sections
+On demand, preview can be reduced to structured components only (compact mode):
+
+- Frontmatter
+- YAML blocks with their preceding headings
+- Configurable tasks section
 
 This effectively provides two modes — documentation mode and data mode. The preview is therefore not merely cosmetic but aligned with the underlying record model.
 
@@ -154,25 +185,27 @@ This effectively provides two modes — documentation mode and data mode. The pr
 
 - grubber → extract
 - matterbase → interact
-- nushell → query
+- DuckDB → query
 
-They can be used independently via CLI. External components such as apex (preview renderer) and nushell (query engine) are interchangeable — any tool that accepts the same input format can be substituted without modifying matterbase.
+They can be used independently via CLI. External components such as apex (preview renderer) are interchangeable — any tool that accepts the same input format can be substituted without modifying matterbase.
 
 **Transparency.** matterbase can reconstruct the underlying CLI command:
 
 ```
-grubber extract … | nu …
+grubber extract … | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE …"
 ```
 
 The UI is a convenience layer, not a proprietary execution environment.
 
+**Non-blocking UI.** All grubber calls run in background worker threads. The Textual event loop is never blocked by filesystem I/O.
+
 ## Known Trade-offs
 
-**Full scan on every invocation.** No incremental indexing, repeated filesystem traversal. Native performance makes full scans inexpensive and avoids index invalidation and migration logic. At significantly larger scales (beyond 10k files), indexing may become necessary.
+**Full scan on every invocation.** No incremental indexing, repeated filesystem traversal. Native Go performance makes full scans inexpensive on local SSD. At significantly larger scales (beyond ~10k files on slow storage), indexing may become necessary.
 
 **YAML-only structured data.** No schema validation, no relational joins across notes. Complex relational modeling is intentionally out of scope.
 
-**External query dependency.** Depends on nushell for advanced filtering. This avoids re-implementing a query engine and keeps matterbase focused on UI. nushell has a concise, easy-to-understand syntax.
+**SSD assumption.** The architecture assumes fast local storage. On network filesystems (NFS, SMB), scan times increase and the streaming benefit becomes more relevant.
 
 ## Summary
 
