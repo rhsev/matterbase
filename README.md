@@ -177,7 +177,7 @@ Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland, `x
 
 ## Collections
 
-If you use [filecollector](https://github.com/rhsev/filecollector) to manage file collections (cross-folder groupings of PDFs, mail exports, photos, etc.), matterbase queries them through the same filter mechanism as any other field. A filter button like `query: ["collection=project-alpha"]` narrows the table to that collection's `type: ref` records.
+If you use [filecollector](https://github.com/rhsev/filecollector) (not public yet) to manage file collections (cross-folder groupings of PDFs, mail exports, photos, etc.), matterbase queries them through the same filter mechanism as any other field. A filter button like `query: ["collection=project-alpha"]` narrows the table to that collection's `type: ref` records.
 
 For the full collection workflow — adding files, syncing macOS metadata, auditing, cleanup — see filecollector's documentation. matterbase only does the *querying* side.
 
