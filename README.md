@@ -1,31 +1,37 @@
 # matterbase
 
-A keyboard-driven terminal UI for browsing, filtering and previewing structured Markdown notes. Markdown files act as containers for YAML blocks — each block can represent a record, a task, a bookmark to an external file, or any structured data you like.
+A database-like TUI for querying frontmatter and YAML in Markdown notes with field filters, full-text search, and a SQL table view. grubber and matterbase are designed to keep data and context together.
 
-Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](https://github.com/rhsev/grubber) for frontmatter-based filtering, [apex](https://github.com/ttscoff/apex) for Markdown preview rendering, [bat](https://github.com/sharkdp/bat) for code/text syntax highlighting, and [DuckDB](https://duckdb.org) for table queries.
+## Why?
 
-## Layout
+Markdown notes with frontmatter/YAML are a lightweight alternative to dedicated databases, but querying them usually means writing custom scripts or learning the syntax of a specialised tool.
 
-Three panels:
+matterbase puts a TUI in front of that. You pick filters by pressing buttons, refine with a search field, and the matching notes appear immediately. When you have what you want, press `y` to copy the underlying grubber command — ready to pipe into other tools.
 
-- **Left** — file list with search and filter buttons
-- **Middle** — metadata table (`t`), toggleable
-- **Right** — preview pane: full file, compact view, or YAML block context
+A typical workflow: filter your notes by `type=contact`, then add a SQL WHERE clause like `birthday IS NOT NULL` to narrow further. The yanked command pipes grubber through DuckDB, so appending `| jq -r '.[] | .name + " " + .birthday'` gives you a clean list.
 
-The currently focused panel is highlighted with an orange border.
+Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](https://github.com/rhsev/grubber) for frontmatter-based filtering, [apex](https://github.com/ttscoff/apex) for preview rendering, [bat](https://github.com/sharkdp/bat) for code/text syntax highlighting, and [DuckDB](https://duckdb.org) for table queries. For macOS and Linux.
+
+![Compact preview mode](screenshot-compact-preview.png)
+*Note list with compact preview (`m`) showing only frontmatter and YAML blocks.*
+
+![Table view](screenshot-table-view.png)
+*Note list with metadata table (`t`). All data fields from frontmatter and YAML at a glance.*
 
 ## Requirements
 
 - Python 3.10+
-- [grubber](https://github.com/rhsev/grubber) — bundled binary for macOS arm64 (v0.8.1, Go); install separately for other platforms
-- [apex](https://github.com/ttscoff/apex) — Markdown preview (optional)
-- [bat](https://github.com/sharkdp/bat) — syntax highlighting for code and text files (optional)
-- [bookmarker](https://github.com/rhsev/bookmarker) — resolving file bookmarks (optional)
+- [grubber](https://github.com/rhsev/grubber) — bundled binary included for macOS arm64; for other platforms install grubber separately and make sure it's on `PATH`
+- [apex](https://github.com/ttscoff/apex) (optional, for preview rendering)
+- [bat](https://github.com/sharkdp/bat) (optional, for syntax-highlighted preview of code and text files)
+- [bookmarker](https://github.com/rhsev/bookmarker) (optional, for resolving `type: ref` records to their target files)
+
+DuckDB ships as a Python dependency and is installed automatically.
 
 ## Installation
 
 ```
-pipx install git+https://github.com/rhsev/matterbase
+pipx install matterbase
 ```
 
 Updates:
@@ -36,7 +42,7 @@ pipx upgrade matterbase
 
 ## Getting started
 
-Run the setup wizard to create a config file:
+Run the setup wizard once to create a config file:
 
 ```
 matterbase --init
@@ -53,16 +59,17 @@ matterbase --config path/to/config.yml
 ## Config
 
 ```yaml
-notes_dir: ~/Notes              # directory of Markdown files
-editor: hx                      # editor command
-apex_theme: ralf                # apex theme name (optional)
-apex_width: 80                  # apex --width value (optional)
-apex_code_highlight: pygments   # apex --code-highlight: pygments or skylighting (optional)
-multi_select: true              # multiple active filters → AND-intersect
-grubber_search_mode: all        # all | frontmatter | blocks_only  (default: all)
-array_fields: [tags, keywords]  # fields grubber normalises to arrays
-table_columns: [status, project, type]  # columns shown in table view (omit = all)
-table_query: "status != 'archive'"      # default SQL WHERE clause for table (optional)
+notes_dir: ~/Notes/Work        # directory of .md files
+editor: hx                     # editor command
+apex_theme: ralf               # apex theme name (optional)
+apex_width: 80                 # apex --width value (optional)
+apex_code_highlight: pygments  # apex --code-highlight tool: pygments or skylighting (optional)
+compact_tasks_heading: Tasks   # h2 heading shown in compact preview (default: Tasks)
+multi_select: true             # multiple active filters → AND-intersect
+grubber_search_mode: all       # all | frontmatter | blocks_only  (default: all)
+array_fields: [tags, keywords] # fields grubber normalises to arrays
+table_columns: [status, project, type]   # columns shown in table view (omit = all)
+table_query: "status != 'archive'"       # default SQL WHERE clause for table (optional)
 
 filters:
   - label: "active"
@@ -88,136 +95,77 @@ filters:
 | `^`      | starts with  | `end^2025`       |
 | `!`      | not equals   | `status!archive` |
 
-Multiple expressions within one button are ANDed. With `multi_select: true`, activating multiple buttons ANDs the result sets.
+Multiple expressions within one button are ANDed together. With `multi_select: true`, activating multiple buttons ANDs the result sets.
 
 ## Keybindings
 
-| Key            | Action                                                        |
-|----------------|---------------------------------------------------------------|
-| `↑` / `↓`     | Navigate file list or table                                   |
-| `Enter`        | Open file in editor (file list) or open file (table)         |
-| `Tab`          | Cycle focus between panels                                    |
-| `Space`        | Toggle focused filter button                                  |
-| `/`            | Jump to search field                                          |
-| `t`            | Toggle metadata table — focuses table immediately; `t` again returns to file list |
-| `a`            | Toggle all files / single file in table                       |
-| `p`            | Toggle preview pane                                           |
-| `m`            | Toggle compact preview (frontmatter + YAML blocks)            |
-| `f`            | Toggle file preview for `type: ref` records                   |
-| `o`            | Open bookmarked file for `type: ref` records                  |
-| `r`            | Refresh file list from disk                                   |
-| `y`            | Copy current grubber command to clipboard                     |
-| `Y`            | Copy grubber command to clipboard and quit                    |
-| `Escape` / `q` | Quit                                                          |
+| Key              | Action                                                |
+|------------------|-------------------------------------------------------|
+| `Tab`            | Cycle focus: buttons → search → list → table → query  |
+| `↑` / `↓`       | Navigate list or table                                 |
+| `Enter`          | Open selected note in editor (or run query in table)  |
+| `Space`          | Toggle focused filter button                          |
+| `/`              | Jump to search field                                  |
+| `p`              | Toggle preview pane                                   |
+| `t`              | Toggle metadata table                                 |
+| `a`              | Toggle all files / single file in table               |
+| `m`              | Toggle compact preview (frontmatter + YAML blocks + Tasks) |
+| `f`              | Toggle file preview for `type: ref` records           |
+| `o`              | Open referenced file for `type: ref` records          |
+| `r`              | Refresh file list from disk                           |
+| `y`              | Copy current grubber command to clipboard             |
+| `Y`              | Copy grubber command to clipboard and quit            |
+| `Escape` / `q`   | Quit                                                  |
 
 ## Search
 
-Type in the search field to filter by filename. Prefix with a space to search full text.
+Type in the search field to filter by filename. Prefix with a space to search full text (filename + content).
 
 ```
-meeting     →  filename contains "meeting"
- budget     →  filename or content contains "budget"
+meeting          →  filename contains "meeting"
+ budget          →  filename or content contains "budget"
 ```
 
-Full-text search starts after 3 characters and stops at 25 matches.
+Fulltext search behaviour:
+
+- Starts after **3 characters** (shorter terms match too broadly)
+- Stops collecting results after **25 matches**. Refine the term if you see "25+ matches"
 
 ## Metadata table (`t`)
 
-Press `t` to open the metadata table in the middle panel — focus lands there immediately. Each row is one YAML block from a Markdown file. The right pane shows the section of the file containing that block.
+Press `t` to switch the middle pane on and show a metadata table. The table shows frontmatter and YAML-block fields for all currently visible notes. Each row is one record.
 
-A SQL query field appears above the table. Type any SQL WHERE clause and press `Enter` to filter:
+A SQL query field appears above the table. Type any DuckDB WHERE clause (without the `WHERE` keyword) and press `Enter` to filter:
 
 ```sql
 status != 'archive'
 amount > 1000
 end IS NOT NULL
 start > '2025-01-01'
+type = 'ref' AND collection = 'project-alpha'
 ```
 
-Press `t` again to close the table and return to the file list.
+DuckDB runs over grubber's JSON output, so the full SQL surface is available: `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators, and so on.
 
-## YAML block context
+The file column in the table shows only the filename, but in queries the full path is available as `_note_file`.
 
-When navigating the table, the right pane shows the frontmatter of the file plus the Markdown section containing the selected YAML block. This keeps data and document context together without leaving the TUI.
+The table cursor follows the file list selection. Press `t` again to close the table.
 
-## File preview
-
-The right pane previews different file types automatically:
-
-| Type              | Renderer                     |
-|-------------------|------------------------------|
-| `.md`             | apex (Markdown)              |
-| `.pdf`            | pypdf (text extraction)      |
-| `.docx`           | python-docx (text + headings)|
-| code / text files | bat (syntax highlighting)    |
-
-## Bookmarks (`type: ref`)
-
-A YAML block with `type: ref` and an `id` or `alias` field is treated as a bookmark:
-
-```markdown
----
-title: My Collection
----
-
-### Project Alpha brief
-
-```yaml
-type: ref
-id: project-alpha-brief
-```
-```
-
-- `f` — toggle between block context and the referenced file's preview
-- `o` — open the referenced file in the default app
-- `Enter` — open the referenced file in the default app
-
-Bookmarks are resolved via [bookmarker](https://github.com/rhsev/bookmarker).
-
-### bookmarker and Spotlight
-
-When a file is added via bookmarker, the bookmark ID is written to the file's extended attributes (`com.apple.metadata:kMDItemDescription`). macOS Spotlight indexes this attribute — so you can find any bookmarked file by its ID or alias directly from Spotlight or Alfred, independently of matterbase.
-
-### mc-add
-
-`mc-add` is a companion script that adds a file to a collection in one step:
-
-```
-mc-add /path/to/file collection.md --title "Project Alpha Brief" --kind pdf
-```
-
-It:
-1. Creates a macOS bookmark via bookmarker (and writes the xattr)
-2. Appends an `### H3` heading and a `type: ref` YAML block to the collection file
-
-```markdown
-### Project Alpha Brief
-
-​```yaml
-id: abc123
-title: Project Alpha Brief
-type: ref
-kind: pdf
-​```
-```
-
-The heading is required so matterbase can display the section context in the right pane. The `title` field is duplicated in the YAML so grubber can query it.
-
-## Terminal multiplexer support
-
-When running inside **zellij**, opening a file from the file list launches the editor in a floating pane. When the editor closes, matterbase is immediately visible again. **tmux** is also supported (new window). Without a multiplexer, the editor opens via terminal suspend/resume.
+See [SQL-QUERIES.md](SQL-QUERIES.md) for a query reference and worked examples.
 
 ## Compact preview (`m`)
 
-Press `m` to toggle compact preview mode. Instead of the full note, renders:
+Press `m` to toggle compact preview mode. Instead of the full note, apex renders a condensed view containing:
 
-1. **Frontmatter** — the complete YAML front matter
-2. **YAML code blocks** — every ` ```yaml ` block with its preceding heading
-3. **Tasks section** — configurable heading (default: `Tasks`)
+1. **Frontmatter** — the complete YAML front matter block
+2. **YAML code blocks** — every ` ```yaml ` block in the document, with its immediately preceding heading (if any)
+3. **Tasks section** — the first `## Tasks` h2 section (heading configurable via `compact_tasks_heading`)
+
+Compact mode is useful for quickly scanning note metadata and task lists without scrolling through full content.
 
 ## Yank (`y` / `Y`)
 
-`y` copies the current grubber command (with active filters and SQL WHERE clause) to the clipboard. `Y` does the same and quits — useful for piping into other tools.
+Press `y` to copy the current grubber command (with active filters and optional SQL WHERE clause) to the clipboard. `Y` does the same and then quits, printing the command to stdout — useful for piping matterbase into other tools.
 
 The reconstructed command includes the full DuckDB pipeline when a table query is active:
 
@@ -225,12 +173,14 @@ The reconstructed command includes the full DuckDB pipeline when a table query i
 grubber extract ~/Notes -a -f status=active | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE amount > 1000"
 ```
 
-Clipboard: `pbcopy` on macOS, `wl-copy` on Wayland, `xclip`/`xsel` on X11.
+Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland, `xclip` or `xsel` on X11.
 
 ## Collections
 
-matterbase queries collections as one filter dimension among others — it does not manage them. The data model, the management CLI tools, and the user guide for querying collections from matterbase all live in the [filecollector](https://github.com/rhsev/filecollector) repository:
+If you use [filecollector](https://github.com/rhsev/filecollector) to manage file collections (cross-folder groupings of PDFs, mail exports, photos, etc.), matterbase queries them through the same filter mechanism as any other field. A filter button like `query: ["collection=project-alpha"]` narrows the table to that collection's `type: ref` records.
 
-- [SPEC.md](https://github.com/rhsev/filecollector/blob/main/SPEC.md) — data model and architecture
-- [COLLECTIONS.md](https://github.com/rhsev/filecollector/blob/main/COLLECTIONS.md) — querying collections from matterbase
-- [RATIONALE.md](https://github.com/rhsev/filecollector/blob/main/RATIONALE.md) — why this exists when macOS already has tags
+For the full collection workflow — adding files, syncing macOS metadata, auditing, cleanup — see filecollector's documentation. matterbase only does the *querying* side.
+
+## Architecture
+
+The design decisions behind this are explained in [ARCHITECTURE.md](ARCHITECTURE.md).

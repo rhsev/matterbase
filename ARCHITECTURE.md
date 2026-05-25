@@ -11,7 +11,9 @@ The system is intentionally built as a layered, stateless architecture:
 ```
 Markdown files
       ↓
-  grubber (fast extraction + coarse filtering, NDJSON stream)
+  grubber (fast extraction + coarse filtering)
+      ↓
+  JSON / NDJSON records
       ↓
   matterbase (TUI)
       ↓
@@ -60,20 +62,19 @@ Markdown remains the source of truth.
 
 ### grubber (Extraction Engine)
 
-**Language:** Go  
-**Version:** 0.8.1  
+**Language:** Go
 **Role:** Fast metadata extraction and coarse filtering
 
 Responsibilities:
 
-- Scan directory tree (multi-threaded)
+- Scan directory tree
 - Extract frontmatter and YAML blocks
 - Apply simple filter expressions
 - Emit JSON or NDJSON
 
 Performance characteristics:
 
-- Full scan of large note collections in well under one second on local SSD
+- ~10,000 files in well under one second (Go, multi-threaded)
 - No persistent index
 - Stateless execution
 
@@ -93,19 +94,21 @@ Advantages:
 
 ### matterbase (Terminal UI)
 
-**Language:** Python 3.10+  
-**Framework:** Textual  
+**Language:** Python
+**Framework:** Textual
 **Role:** Interactive exploration layer
 
 Module structure:
 
-| Module | Responsibility |
-|---|---|
-| `grubber_client.py` | grubber subprocess integration, NDJSON streaming, no Textual dependency |
-| `content.py` | MMD parsing, PDF/DOCX extraction, Markdown section helpers, apex rendering |
-| `widgets.py` | Reusable Textual widgets (FilterButton, NoteItem, NoteListView, MetaDataTable) |
-| `app.py` | MatterbaseApp, layout, event handlers, config loading, CLI entry point |
-| `__init__.py` | Re-export shim |
+| Module               | Responsibility                                                              |
+|----------------------|-----------------------------------------------------------------------------|
+| `grubber_client.py`  | grubber subprocess integration, NDJSON streaming, no Textual dependency     |
+| `content.py`         | MMD parsing, PDF/DOCX extraction, Markdown section helpers, apex rendering  |
+| `widgets.py`         | Reusable Textual widgets (FilterButton, NoteItem, NoteListView, MetaDataTable) |
+| `app.py`             | MatterbaseApp, layout, event handlers, config loading, CLI entry point      |
+| `init_config.py`     | Interactive `--init` setup wizard                                            |
+| `__init__.py`        | Re-export shim                                                              |
+| `__main__.py`        | Allows `python -m matterbase` invocation                                    |
 
 Responsibilities:
 
@@ -139,6 +142,8 @@ After grubber reduces the candidate set, an optional SQL WHERE clause is applied
 - field conditions (`status != 'archive'`)
 - comparisons (`amount > 1000`)
 - null checks (`end IS NOT NULL`)
+- set membership (`collection IN ('a', 'b')`)
+- pattern matching (`title LIKE '%2025%'`)
 
 The user types the WHERE clause directly (without the `WHERE` keyword). DuckDB executes:
 
@@ -151,23 +156,21 @@ This enforces a two-phase query strategy:
 1. Cheap structural filter (grubber)
 2. Expressive record-level query (DuckDB SQL)
 
-The reconstructed CLI command (yank) reflects the full pipeline:
+This mirrors classical query planning: reduce dataset early, apply heavier transformations later.
 
-```
-grubber extract … | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE …"
-```
+DuckDB is a Python library dependency; it is installed automatically with matterbase and embedded in the process. No separate daemon, no external installation.
 
 ## Preview Architecture
 
 The preview system renders content via multiple renderers depending on file type:
 
-| Type | Renderer |
-|---|---|
-| `.md` | apex (Markdown, terminal256) |
-| `.pdf` | pypdf (text extraction) |
-| `.docx` | python-docx (text + headings) |
-| code / text | bat (syntax highlighting) |
-| fallback | raw content with dimmed frontmatter |
+| Type              | Renderer                          |
+|-------------------|-----------------------------------|
+| `.md`             | apex (Markdown, terminal256)      |
+| `.pdf`            | pypdf (text extraction)           |
+| `.docx`           | python-docx (text + headings)     |
+| code / text       | bat (syntax highlighting)         |
+| fallback          | raw content with dimmed frontmatter |
 
 On demand, preview can be reduced to structured components only (compact mode):
 
