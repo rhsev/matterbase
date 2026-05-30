@@ -6,7 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from matterbase.grubber_client import _run_grubber_cmd, query_files, run_grubber
+from matterbase.grubber_client import (
+    _run_grubber_cmd,
+    extract_to_ndjson,
+    query_cached_files,
+    query_files,
+    run_grubber,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -254,3 +260,142 @@ class TestQueryFiles:
         flat = calls[0]
         assert "status=active" in flat
         assert "project=x" in flat
+
+
+# ---------------------------------------------------------------------------
+# extract_to_ndjson — build the in-session cache
+# ---------------------------------------------------------------------------
+
+class TestExtractToNdjson:
+    def test_writes_stdout_to_file_and_returns_true(self, tmp_path):
+        out = tmp_path / "cache.ndjson"
+        body = '{"_note_file":"/a.md","binder":"x"}\n'
+        with patch("subprocess.run", return_value=_fake_run(body)):
+            ok = extract_to_ndjson("/notes", str(out))
+        assert ok is True
+        assert out.read_text() == body
+
+    def test_nonzero_returns_false_and_no_file(self, tmp_path):
+        out = tmp_path / "cache.ndjson"
+        errors = []
+        err = MagicMock()
+        err.stdout = ""
+        err.stderr = "boom"
+        err.returncode = 1
+        with patch("subprocess.run", return_value=err):
+            ok = extract_to_ndjson("/notes", str(out), on_error=errors.append)
+        assert ok is False
+        assert not out.exists()
+        assert errors
+
+    def test_command_shape_default_mode(self, tmp_path):
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _fake_run("")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            extract_to_ndjson("/notes", str(tmp_path / "c.ndjson"))
+
+        cmd = captured["cmd"]
+        assert cmd[:3] == ["grubber", "extract", "/notes"]
+        assert "-a" in cmd
+        assert "--format=ndjson" in cmd
+
+    def test_command_shape_mode_depth_mmd(self, tmp_path):
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _fake_run("")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            extract_to_ndjson(
+                "/notes", str(tmp_path / "c.ndjson"),
+                search_mode="frontmatter", mmd=True, depth=3,
+            )
+
+        cmd = captured["cmd"]
+        assert "--frontmatter-only" in cmd
+        assert "--mmd" in cmd
+        assert "--depth" in cmd and "3" in cmd
+
+    def test_timeout_returns_false(self, tmp_path):
+        errors = []
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("grubber", 30)):
+            ok = extract_to_ndjson("/notes", str(tmp_path / "c.ndjson"), on_error=errors.append)
+        assert ok is False
+        assert errors
+
+
+# ---------------------------------------------------------------------------
+# query_cached_files — replay the cache via --from-ndjson
+# ---------------------------------------------------------------------------
+
+class TestQueryCachedFiles:
+    def test_no_queries_replays_all(self):
+        calls = []
+
+        def fake_cmd(cmd, *args, **kwargs):
+            calls.append(cmd)
+            return [{"_note_file": "/a.md"}, {"_note_file": "/b.md"}]
+
+        with patch("matterbase.grubber_client._run_grubber_cmd", side_effect=fake_cmd):
+            result = query_cached_files("/cache.ndjson", [], multi_select=False)
+
+        assert result == ["/a.md", "/b.md"]
+        cmd = calls[0]
+        # sources from the cache, never re-scans a notes dir
+        assert "--from-ndjson" in cmd and "/cache.ndjson" in cmd
+        assert "-f" not in cmd
+
+    def test_single_query_passes_f_and_uses_cache(self):
+        calls = []
+
+        def fake_cmd(cmd, *args, **kwargs):
+            calls.append(cmd)
+            return [{"_note_file": "/a.md"}]
+
+        with patch("matterbase.grubber_client._run_grubber_cmd", side_effect=fake_cmd):
+            query_cached_files("/cache.ndjson", [["binder=alpha"]], multi_select=False)
+
+        cmd = calls[0]
+        assert cmd[:4] == ["grubber", "extract", "--from-ndjson", "/cache.ndjson"]
+        assert "-f" in cmd and "binder=alpha" in cmd
+
+    def test_dedups_paths(self):
+        records = [{"_note_file": "/a.md"}, {"_note_file": "/a.md"}, {"_note_file": "/b.md"}]
+        with patch("matterbase.grubber_client._run_grubber_cmd", return_value=records):
+            result = query_cached_files("/cache.ndjson", [], multi_select=False)
+        assert result == ["/a.md", "/b.md"]
+
+    def test_multi_select_intersects(self):
+        def fake_cmd(cmd, *args, **kwargs):
+            if "binder=alpha" in cmd:
+                return [{"_note_file": "/a.md"}, {"_note_file": "/b.md"}]
+            if "kind=pdf" in cmd:
+                return [{"_note_file": "/b.md"}, {"_note_file": "/c.md"}]
+            return []
+
+        with patch("matterbase.grubber_client._run_grubber_cmd", side_effect=fake_cmd):
+            result = query_cached_files(
+                "/cache.ndjson",
+                [["binder=alpha"], ["kind=pdf"]],
+                multi_select=True,
+            )
+        assert result == ["/b.md"]
+
+    def test_array_fields_forwarded(self):
+        captured = {}
+
+        def fake_cmd(cmd, array_fields=None, on_error=None):
+            captured["array_fields"] = array_fields
+            return [{"_note_file": "/a.md"}]
+
+        with patch("matterbase.grubber_client._run_grubber_cmd", side_effect=fake_cmd):
+            query_cached_files(
+                "/cache.ndjson", [["binder=alpha"]], multi_select=False,
+                array_fields=["tags"],
+            )
+        assert captured["array_fields"] == ["tags"]

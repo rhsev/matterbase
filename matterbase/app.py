@@ -40,8 +40,9 @@ from .grubber_client import (
     MIN_GRUBBER_VERSION,
     _run_grubber_cmd,
     check_grubber_version,
+    extract_to_ndjson,
+    query_cached_files,
     query_files,
-    stream_grubber_paths,
 )
 from .widgets import FilterButton, MetaDataTable, NoteItem, NoteListView
 
@@ -266,6 +267,10 @@ class MatterbaseApp(App):
         self._all_files: list[str] = []
         self._current_visible: list[str] = []
         self._active_queries: list[list[str]] = []
+        # In-session NDJSON cache: the notes dir is scanned once per refresh into
+        # this file; filter changes replay it via grubber --from-ndjson instead
+        # of re-scanning Markdown. Rebuilt on refresh, removed on exit.
+        self._cache_path: str | None = None
         self._search_term: str = ""
         self._preview_visible: bool = True
         self._table_mode: bool = False
@@ -324,47 +329,82 @@ class MatterbaseApp(App):
     async def on_mount(self) -> None:
         await self._refresh_files()
 
+    def on_unmount(self) -> None:
+        # Remove the per-session NDJSON cache file on teardown.
+        if self._cache_path and os.path.exists(self._cache_path):
+            try:
+                os.unlink(self._cache_path)
+            except OSError:
+                pass
+
     # ── Grubber / file refresh ────────────────────────────────────────
 
-    async def _refresh_files(self) -> None:
-        """Re-run grubber and rebuild the file list in a background thread."""
-        needs_intersect = self.multi_select and len(self._active_queries) > 1
-        on_error = lambda msg: self.call_from_thread(
+    def _ensure_cache_path(self) -> str:
+        """Lazily allocate the per-session NDJSON cache file path."""
+        if self._cache_path is None:
+            fd, path = tempfile.mkstemp(prefix="matterbase-", suffix=".ndjson")
+            os.close(fd)
+            self._cache_path = path
+        return self._cache_path
+
+    def _status_on_error(self):
+        return lambda msg: self.call_from_thread(
             self.query_one("#status", Static).update, f" [red]{msg}[/red]"
         )
 
-        if needs_intersect:
-            # AND-intersect requires all results per query upfront.
-            def _intersect() -> None:
-                paths = query_files(
-                    self.notes_dir,
-                    self._active_queries,
-                    self.multi_select,
-                    search_mode=self._grubber_search_mode,
-                    array_fields=self._grubber_array_fields,
-                    mmd=self._grubber_mmd,
-                    depth=self._grubber_depth,
-                    on_error=on_error,
-                )
-                self.call_from_thread(self._finish_refresh, paths)
-            self.run_worker(_intersect, exclusive=True, thread=True, group="refresh")
-        else:
-            expressions = (
-                [expr for q in self._active_queries for expr in q]
-                if self._active_queries else None
+    async def _refresh_files(self) -> None:
+        """Re-scan the notes dir once into the NDJSON cache, then filter it.
+
+        This is the only path that touches Markdown on disk; it runs on refresh
+        (`r`) and at startup. Filter changes use _apply_filters (cache replay).
+        """
+        cache_path = self._ensure_cache_path()
+        on_error = self._status_on_error()
+
+        def _rebuild_and_filter() -> None:
+            ok = extract_to_ndjson(
+                self.notes_dir,
+                cache_path,
+                search_mode=self._grubber_search_mode,
+                mmd=self._grubber_mmd,
+                depth=self._grubber_depth,
+                on_error=on_error,
             )
-            def _stream() -> None:
-                paths = list(stream_grubber_paths(
-                    self.notes_dir,
-                    expressions=expressions,
-                    search_mode=self._grubber_search_mode,
-                    array_fields=self._grubber_array_fields,
-                    mmd=self._grubber_mmd,
-                    depth=self._grubber_depth,
-                    on_error=on_error,
-                ))
-                self.call_from_thread(self._finish_refresh, paths)
-            self.run_worker(_stream, exclusive=True, thread=True, group="refresh")
+            paths = query_cached_files(
+                cache_path,
+                self._active_queries,
+                self.multi_select,
+                array_fields=self._grubber_array_fields,
+                on_error=on_error,
+            ) if ok else []
+            self.call_from_thread(self._finish_refresh, paths)
+
+        self.run_worker(_rebuild_and_filter, exclusive=True, thread=True, group="refresh")
+
+    async def _apply_filters(self) -> None:
+        """Re-filter the existing in-session cache without re-scanning Markdown.
+
+        The fast path for filter-button changes: the data hasn't changed, only
+        the filter has, so replay the cache instead of re-running the dir scan.
+        Falls back to a full refresh if the cache isn't built yet.
+        """
+        if self._cache_path is None or not os.path.exists(self._cache_path):
+            await self._refresh_files()
+            return
+        cache_path = self._cache_path
+        on_error = self._status_on_error()
+
+        def _filter() -> None:
+            paths = query_cached_files(
+                cache_path,
+                self._active_queries,
+                self.multi_select,
+                array_fields=self._grubber_array_fields,
+                on_error=on_error,
+            )
+            self.call_from_thread(self._finish_refresh, paths)
+
+        self.run_worker(_filter, exclusive=True, thread=True, group="refresh")
 
     def _finish_refresh(self, paths: list[str]) -> None:
         self._all_files = paths
@@ -461,7 +501,8 @@ class MatterbaseApp(App):
         else:
             self._active_queries = [q for q in self._active_queries if q is not btn.query]
 
-        await self._refresh_files()
+        # Filter changed, not the data — replay the cache, don't re-scan Markdown.
+        await self._apply_filters()
 
     async def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "search":

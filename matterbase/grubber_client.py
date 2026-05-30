@@ -17,9 +17,9 @@ from pathlib import Path
 # $GRUBBER if it lives somewhere non-standard.
 # ---------------------------------------------------------------------------
 
-# Minimum grubber matterbase relies on. 0.10.0 brings --from-ndjson, needed to
-# read grubber-collection's NDJSON inbox.
-MIN_GRUBBER_VERSION = (0, 10, 0)
+# Minimum grubber matterbase relies on. 0.10.0 brings --from-ndjson; 0.10.1
+# fixes a source-only replay scanning the cwd, which the filter cache relies on.
+MIN_GRUBBER_VERSION = (0, 10, 1)
 
 
 def _grubber_binary() -> str:
@@ -246,5 +246,110 @@ def query_files(
 
     all_exprs = [expr for q in active_queries for expr in q]
     return run_grubber(notes_dir, all_exprs, **kw)
+
+
+# ---------------------------------------------------------------------------
+# In-session NDJSON cache (extract once, filter by replay)
+#
+# Instead of re-scanning Markdown on every filter change, matterbase scans the
+# notes dir once per refresh into an NDJSON file and re-filters by replaying it
+# through `grubber --from-ndjson`. grubber stays the single filter authority
+# (its -f operators are not reimplemented here); the cache is rebuilt on every
+# refresh, so freshness equals a normal re-scan and there is no cross-session
+# staleness. The session's search_mode/mmd/depth are baked into the cache at
+# build time; replay only varies the -f filters. array_fields are applied at
+# *replay* time (grubber applies them to source records), so the cache stores
+# raw field values and they are split once, during filtering.
+# ---------------------------------------------------------------------------
+
+def extract_to_ndjson(
+    notes_dir: str,
+    out_path: str,
+    *,
+    search_mode: str = "all",
+    mmd: bool = False,
+    depth: int | None = None,
+    on_error: "callable[[str], None] | None" = None,
+) -> bool:
+    """Scan notes_dir once and write the full record set to out_path as NDJSON.
+
+    Returns True on success. The search_mode is baked in (fixed per session).
+    """
+    mode_flag = _STREAM_MODE_FLAG.get(search_mode, "-a")
+    cmd = [GRUBBER_BIN, "extract", notes_dir, mode_flag, "--format=ndjson"]
+    if depth is not None:
+        cmd += ["--depth", str(depth)]
+    if mmd:
+        cmd.append("--mmd")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            timeout=30, env=os.environ.copy(),
+        )
+        if result.returncode != 0:
+            if on_error and result.stderr.strip():
+                on_error(f"grubber: {result.stderr.strip()[:120]}")
+            return False
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(result.stdout)
+        return True
+    except subprocess.TimeoutExpired:
+        if on_error:
+            on_error("grubber: timed out building cache")
+        return False
+    except (FileNotFoundError, OSError) as exc:
+        if on_error:
+            on_error(f"grubber: {exc}")
+        return False
+
+
+def _replay_cached(
+    cache_path: str,
+    expressions: list[str] | None,
+    array_fields: list[str] | None,
+    on_error: "callable[[str], None] | None",
+) -> list[str]:
+    """Replay the cache through grubber with optional -f filters; dedup paths."""
+    cmd = [GRUBBER_BIN, "extract", "--from-ndjson", cache_path]
+    if expressions:
+        for expr in expressions:
+            cmd.extend(["-f", expr])
+    records = _run_grubber_cmd(cmd, array_fields, on_error)
+    seen: set[str] = set()
+    paths: list[str] = []
+    for record in records:
+        fp = record.get("_note_file", "")
+        if fp and fp not in seen:
+            seen.add(fp)
+            paths.append(fp)
+    return paths
+
+
+def query_cached_files(
+    cache_path: str,
+    active_queries: list[list[str]],
+    multi_select: bool,
+    *,
+    array_fields: list[str] | None = None,
+    on_error: "callable[[str], None] | None" = None,
+) -> list[str]:
+    """Filter the in-session NDJSON cache by replay. Mirrors query_files, but
+    sources from --from-ndjson instead of re-scanning notes_dir. No notes_dir/
+    search_mode/mmd/depth — those are baked into the cache at build time."""
+    if not active_queries:
+        return _replay_cached(cache_path, None, array_fields, on_error)
+
+    if multi_select and len(active_queries) > 1:
+        sets = [
+            set(_replay_cached(cache_path, q, array_fields, on_error))
+            for q in active_queries
+        ]
+        combined = sets[0]
+        for s in sets[1:]:
+            combined &= s
+        return sorted(combined)
+
+    all_exprs = [expr for q in active_queries for expr in q]
+    return _replay_cached(cache_path, all_exprs, array_fields, on_error)
 
 
