@@ -1,6 +1,6 @@
 """MatterbaseApp — the Textual application, config loader, and CLI entry point."""
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 import argparse
 import datetime
@@ -40,7 +40,7 @@ from .grubber_client import (
     MIN_GRUBBER_VERSION,
     _run_grubber_cmd,
     check_grubber_version,
-    extract_to_ndjson,
+    extract_to_jsonl,
     query_cached_files,
     query_files,
 )
@@ -267,8 +267,8 @@ class MatterbaseApp(App):
         self._all_files: list[str] = []
         self._current_visible: list[str] = []
         self._active_queries: list[list[str]] = []
-        # In-session NDJSON cache: the notes dir is scanned once per refresh into
-        # this file; filter changes replay it via grubber --from-ndjson instead
+        # In-session JSONL cache: the notes dir is scanned once per refresh into
+        # this file; filter changes replay it via grubber --from-jsonl instead
         # of re-scanning Markdown. Rebuilt on refresh, removed on exit.
         self._cache_path: str | None = None
         self._search_term: str = ""
@@ -330,7 +330,7 @@ class MatterbaseApp(App):
         await self._refresh_files()
 
     def on_unmount(self) -> None:
-        # Remove the per-session NDJSON cache file on teardown.
+        # Remove the per-session JSONL cache file on teardown.
         if self._cache_path and os.path.exists(self._cache_path):
             try:
                 os.unlink(self._cache_path)
@@ -340,9 +340,9 @@ class MatterbaseApp(App):
     # ── Grubber / file refresh ────────────────────────────────────────
 
     def _ensure_cache_path(self) -> str:
-        """Lazily allocate the per-session NDJSON cache file path."""
+        """Lazily allocate the per-session JSONL cache file path."""
         if self._cache_path is None:
-            fd, path = tempfile.mkstemp(prefix="matterbase-", suffix=".ndjson")
+            fd, path = tempfile.mkstemp(prefix="matterbase-", suffix=".jsonl")
             os.close(fd)
             self._cache_path = path
         return self._cache_path
@@ -353,7 +353,7 @@ class MatterbaseApp(App):
         )
 
     async def _refresh_files(self) -> None:
-        """Re-scan the notes dir once into the NDJSON cache, then filter it.
+        """Re-scan the notes dir once into the JSONL cache, then filter it.
 
         This is the only path that touches Markdown on disk; it runs on refresh
         (`r`) and at startup. Filter changes use _apply_filters (cache replay).
@@ -362,7 +362,7 @@ class MatterbaseApp(App):
         on_error = self._status_on_error()
 
         def _rebuild_and_filter() -> None:
-            ok = extract_to_ndjson(
+            ok = extract_to_jsonl(
                 self.notes_dir,
                 cache_path,
                 search_mode=self._grubber_search_mode,

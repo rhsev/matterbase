@@ -21,7 +21,7 @@ Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](http
 ## Requirements
 
 - Python 3.10+
-- [grubber](https://github.com/rhsev/grubber) **≥ 0.10.1** — install it and make sure it's on `PATH` (override the location with `$GRUBBER`). matterbase checks the version at startup. It scans the notes dir once per refresh into an NDJSON cache and re-filters by replaying it through `grubber --from-ndjson`; 0.10.1 is the first release where that source-only replay does not also scan the working directory.
+- [grubber](https://github.com/rhsev/grubber) **≥ 0.11.0** — install it and make sure it's on `PATH` (override the location with `$GRUBBER`). matterbase checks the version at startup. It scans the notes dir once per refresh into a JSONL cache and re-filters by replaying it through `grubber --from-jsonl`; 0.11.0 is the release with that flag (and where source-only replay does not also scan the working directory).
 - [apex](https://github.com/ttscoff/apex) (optional, for preview rendering)
 - [bat](https://github.com/sharkdp/bat) (optional, for syntax-highlighted preview of code and text files)
 - [bookmarker](https://github.com/rhsev/bookmarker) (optional, for resolving `type: ref` records to their target files)

@@ -17,9 +17,10 @@ from pathlib import Path
 # $GRUBBER if it lives somewhere non-standard.
 # ---------------------------------------------------------------------------
 
-# Minimum grubber matterbase relies on. 0.10.0 brings --from-ndjson; 0.10.1
-# fixes a source-only replay scanning the cwd, which the filter cache relies on.
-MIN_GRUBBER_VERSION = (0, 10, 1)
+# Minimum grubber matterbase relies on. 0.11.0 is the release with --from-jsonl
+# (renamed from --from-ndjson) whose source-only replay does not scan the cwd —
+# the filter cache relies on both.
+MIN_GRUBBER_VERSION = (0, 11, 0)
 
 
 def _grubber_binary() -> str:
@@ -137,7 +138,7 @@ def run_grubber(
 
 
 # ---------------------------------------------------------------------------
-# NDJSON streaming
+# JSONL streaming
 # ---------------------------------------------------------------------------
 
 _STREAM_MODE_FLAG = {
@@ -153,7 +154,7 @@ def _stream_grubber_records(
     array_fields: list[str] | None = None,
     on_error: "callable[[str], None] | None" = None,
 ) -> Iterator[dict]:
-    """Yield grubber records one by one from an NDJSON stream."""
+    """Yield grubber records one by one from an JSONL stream."""
     env = os.environ.copy()
     if array_fields:
         env["GRUBBER_ARRAY_FIELDS"] = ",".join(array_fields)
@@ -173,7 +174,7 @@ def _stream_grubber_records(
                 yield json.loads(line)
             except json.JSONDecodeError as exc:
                 if on_error:
-                    on_error(f"grubber: invalid NDJSON ({exc})")
+                    on_error(f"grubber: invalid JSONL ({exc})")
         proc.wait()
         if proc.returncode != 0:
             stderr = proc.stderr.read().strip()
@@ -196,9 +197,9 @@ def stream_grubber_paths(
     depth: int | None = None,
     on_error: "callable[[str], None] | None" = None,
 ) -> Iterator[str]:
-    """Yield unique file paths from grubber via NDJSON as they are discovered."""
+    """Yield unique file paths from grubber via JSONL as they are discovered."""
     mode_flag = _STREAM_MODE_FLAG.get(search_mode, "-a")
-    cmd = [GRUBBER_BIN, "extract", notes_dir, mode_flag, "--format=ndjson"]
+    cmd = [GRUBBER_BIN, "extract", notes_dir, mode_flag, "--format=jsonl"]
     if depth is not None:
         cmd += ["--depth", str(depth)]
     if mmd:
@@ -249,11 +250,11 @@ def query_files(
 
 
 # ---------------------------------------------------------------------------
-# In-session NDJSON cache (extract once, filter by replay)
+# In-session JSONL cache (extract once, filter by replay)
 #
 # Instead of re-scanning Markdown on every filter change, matterbase scans the
-# notes dir once per refresh into an NDJSON file and re-filters by replaying it
-# through `grubber --from-ndjson`. grubber stays the single filter authority
+# notes dir once per refresh into an JSONL file and re-filters by replaying it
+# through `grubber --from-jsonl`. grubber stays the single filter authority
 # (its -f operators are not reimplemented here); the cache is rebuilt on every
 # refresh, so freshness equals a normal re-scan and there is no cross-session
 # staleness. The session's search_mode/mmd/depth are baked into the cache at
@@ -262,7 +263,7 @@ def query_files(
 # raw field values and they are split once, during filtering.
 # ---------------------------------------------------------------------------
 
-def extract_to_ndjson(
+def extract_to_jsonl(
     notes_dir: str,
     out_path: str,
     *,
@@ -271,12 +272,12 @@ def extract_to_ndjson(
     depth: int | None = None,
     on_error: "callable[[str], None] | None" = None,
 ) -> bool:
-    """Scan notes_dir once and write the full record set to out_path as NDJSON.
+    """Scan notes_dir once and write the full record set to out_path as JSONL.
 
     Returns True on success. The search_mode is baked in (fixed per session).
     """
     mode_flag = _STREAM_MODE_FLAG.get(search_mode, "-a")
-    cmd = [GRUBBER_BIN, "extract", notes_dir, mode_flag, "--format=ndjson"]
+    cmd = [GRUBBER_BIN, "extract", notes_dir, mode_flag, "--format=jsonl"]
     if depth is not None:
         cmd += ["--depth", str(depth)]
     if mmd:
@@ -310,7 +311,7 @@ def _replay_cached(
     on_error: "callable[[str], None] | None",
 ) -> list[str]:
     """Replay the cache through grubber with optional -f filters; dedup paths."""
-    cmd = [GRUBBER_BIN, "extract", "--from-ndjson", cache_path]
+    cmd = [GRUBBER_BIN, "extract", "--from-jsonl", cache_path]
     if expressions:
         for expr in expressions:
             cmd.extend(["-f", expr])
@@ -333,8 +334,8 @@ def query_cached_files(
     array_fields: list[str] | None = None,
     on_error: "callable[[str], None] | None" = None,
 ) -> list[str]:
-    """Filter the in-session NDJSON cache by replay. Mirrors query_files, but
-    sources from --from-ndjson instead of re-scanning notes_dir. No notes_dir/
+    """Filter the in-session JSONL cache by replay. Mirrors query_files, but
+    sources from --from-jsonl instead of re-scanning notes_dir. No notes_dir/
     search_mode/mmd/depth — those are baked into the cache at build time."""
     if not active_queries:
         return _replay_cached(cache_path, None, array_fields, on_error)
