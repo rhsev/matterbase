@@ -1,6 +1,6 @@
 """MatterbaseApp — the Textual application, config loader, and CLI entry point."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 import argparse
 import datetime
