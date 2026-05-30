@@ -2,7 +2,7 @@
 
 import json
 import os
-import platform
+import re
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,18 +10,47 @@ from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Binary resolution
+#
+# grubber is matterbase's actively-developed core engine; it is expected to be
+# installed once and on PATH (like git or grep), not vendored per-consumer.
+# Bundling a fast-moving tool only guarantees version drift. Override with
+# $GRUBBER if it lives somewhere non-standard.
 # ---------------------------------------------------------------------------
 
+# Minimum grubber matterbase relies on. 0.10.0 brings --from-ndjson, needed to
+# read grubber-collection's NDJSON inbox.
+MIN_GRUBBER_VERSION = (0, 10, 0)
+
+
 def _grubber_binary() -> str:
-    script_dir = Path(__file__).resolve().parent
-    arch = platform.machine().lower()  # "arm64" or "x86_64"
-    candidate = script_dir / "vendor" / f"grubber-macos-{arch}"
-    if candidate.exists():
-        return str(candidate)
-    return "grubber"
+    """Resolve grubber: $GRUBBER override, else `grubber` on PATH."""
+    return os.environ.get("GRUBBER") or "grubber"
 
 
 GRUBBER_BIN = _grubber_binary()
+
+
+def _parse_version(text: str) -> tuple[int, int, int] | None:
+    """Pull an x.y[.z] version tuple out of `grubber --version` output."""
+    m = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", text)
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+
+
+def check_grubber_version() -> tuple[bool, str]:
+    """Probe grubber --version. Returns (meets_minimum, version_or_reason)."""
+    try:
+        probe = subprocess.run(
+            [GRUBBER_BIN, "--version"], capture_output=True, timeout=5
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return (False, "not found")
+    text = probe.stdout.decode().strip()
+    parsed = _parse_version(text)
+    if parsed is None:
+        return (False, text or "unknown")
+    return (parsed >= MIN_GRUBBER_VERSION, text)
 
 
 # ---------------------------------------------------------------------------

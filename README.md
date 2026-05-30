@@ -21,7 +21,7 @@ Built with [Textual](https://github.com/Textualize/textual). Uses [grubber](http
 ## Requirements
 
 - Python 3.10+
-- [grubber](https://github.com/rhsev/grubber) — bundled binary included for macOS arm64; for other platforms install grubber separately and make sure it's on `PATH`
+- [grubber](https://github.com/rhsev/grubber) **≥ 0.10.0** — install it and make sure it's on `PATH` (override the location with `$GRUBBER`). matterbase checks the version at startup; 0.10.0 brings `--from-ndjson`, used to read grubber-collection's NDJSON inbox.
 - [apex](https://github.com/ttscoff/apex) (optional, for preview rendering)
 - [bat](https://github.com/sharkdp/bat) (optional, for syntax-highlighted preview of code and text files)
 - [bookmarker](https://github.com/rhsev/bookmarker) (optional, for resolving `type: ref` records to their target files)

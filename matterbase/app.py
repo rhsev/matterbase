@@ -37,7 +37,9 @@ from .content import (
 )
 from .grubber_client import (
     GRUBBER_BIN,
+    MIN_GRUBBER_VERSION,
     _run_grubber_cmd,
+    check_grubber_version,
     query_files,
     stream_grubber_paths,
 )
@@ -1123,6 +1125,17 @@ def main() -> None:
         sys.exit(1)
     except OSError as e:
         print(f"Error: could not run grubber ({GRUBBER_BIN}): {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Require a grubber new enough for the features matterbase relies on.
+    ok, found_version = check_grubber_version()
+    if not ok:
+        want = ".".join(map(str, MIN_GRUBBER_VERSION))
+        print(
+            f"Error: grubber {want} or newer is required (found: {found_version}).",
+            file=sys.stderr,
+        )
+        print(f"Update grubber: {GRUBBER_BIN}", file=sys.stderr)
         sys.exit(1)
 
     config = load_config(args.config)
