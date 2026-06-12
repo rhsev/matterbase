@@ -1,7 +1,6 @@
 # matterbase
 
-A database-like TUI for querying frontmatter and YAML in Markdown notes (and
-jsonl files) with field filters, full-text search, and a SQL table view.
+A database-like table view on frontmatter and YAML records in Markdown notes. Build a query command for the shell (field filters and SQL). For macOS and Linux.
 grubber and matterbase are designed to keep data and context together.
 
 ## Why?
