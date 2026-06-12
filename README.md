@@ -1,8 +1,8 @@
 # matterbase
 
-A query-construction TUI over a "database" made of record sources — markdown,
-typst, and jsonl files holding YAML/JSON records. grubber and matterbase are
-designed to keep data and context together.
+A database-like TUI for querying frontmatter and YAML in Markdown notes (and
+jsonl files) with field filters, full-text search, and a SQL table view.
+grubber and matterbase are designed to keep data and context together.
 
 ## Why?
 
@@ -35,10 +35,11 @@ so appending `| jq -r '.[] | .name + " " + .birthday'` gives you a clean list.
 *The query builder on the left, every passing record in one table, and the
 preview in `record` mode showing the selected record's fields.*
 
-The atomic unit is the **record**: a markdown/typst file contributes one record
+The unit is the **record**: a markdown file contributes one record
 per YAML block (plus frontmatter), a jsonl file one per line. The source file
-is a field on the record (`_note_file`), not a navigation level — there is no
-file list. See [ARCHITECTURE.md](ARCHITECTURE.md) for the technical layering.
+is a field on the record (`_note_file`). The source file is previewed in the
+right pane and can be opened to edit the records or the context in the
+source markdown file. See [ARCHITECTURE.md](ARCHITECTURE.md) for the technical layering.
 
 Built with [Textual](https://github.com/Textualize/textual). Uses
 [grubber](https://github.com/rhsev/grubber) for record extraction and
@@ -197,7 +198,7 @@ machines whose grubber config defines that set; keeping the set in sync with
 Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland,
 `xclip` or `xsel` on X11.
 
-## Collections
+## Collections (not yet public)
 
 If you use [markbinder](https://github.com/rhsev/markbinder) to organize files
 into binders, its central collection index (`<notes_dir>/collections/*.jsonl`)
