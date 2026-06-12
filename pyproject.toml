@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "matterbase"
+version = "0.6.0"
+description = "Query-construction TUI over record sources (markdown / typst / jsonl)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "rhsev", email = "huelsmann@sevelen.net" }
+]
+keywords = ["markdown", "notes", "tui", "terminal", "yaml", "metadata", "query"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "textual>=0.80.0",
+    "pyyaml",
+    "rich",
+    "duckdb",
+]
+
+[project.urls]
+Repository = "https://github.com/rhsev/matterbase"
+
+[project.scripts]
+matterbase = "matterbase:main"
+
+[tool.setuptools.packages.find]
+include = ["matterbase*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
