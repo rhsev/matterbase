@@ -68,6 +68,10 @@ filtering, [apex](https://github.com/ttscoff/apex) for preview rendering,
 go install github.com/rhsev/matterbase/cmd/matterbase@latest
 ```
 
+Or grab a binary from the [releases](https://github.com/rhsev/matterbase/releases)
+page (macOS arm64/amd64, Linux amd64/arm64), `chmod +x`, put it on `PATH`.
+macOS quarantines browser downloads: `xattr -d com.apple.quarantine matterbase-*`.
+
 ## Usage
 
 ```
