@@ -1,0 +1,13 @@
+# local-only working documents
+CONCEPT.md
+AUFTRAG-*.md
+
+# local go workspace / binaries
+go.work
+go.work.sum
+/matterbase
+PARITY.md
+
+# python leftovers never return
+.venv/
+.pytest_cache/
