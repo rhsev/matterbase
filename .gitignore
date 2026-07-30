@@ -11,3 +11,6 @@ PARITY.md
 # python leftovers never return
 .venv/
 .pytest_cache/
+
+# compiled binaries: rebuild, never commit
+cmd/taskbase/taskbase
