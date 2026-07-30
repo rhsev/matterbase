@@ -9,16 +9,18 @@ import (
 )
 
 // TestIntegrationRealGrubberData exercises the extract → replay → render
-// chain against the real rhsev tree — the "Headless-Render gegen echte
-// grubber-Daten" verification the AUFTRAG asks for, skipped when grubber
-// or the tree aren't available (e.g. CI).
+// chain headlessly against a real notes tree. Point MATTERBASE_TEST_NOTES_DIR
+// at one to run it; skipped when that or grubber is missing (e.g. CI).
 func TestIntegrationRealGrubberData(t *testing.T) {
 	if _, err := exec.LookPath("grubber"); err != nil {
 		t.Skip("grubber not on PATH")
 	}
-	const notesDir = "/Volumes/lightning/Git/rhsev/twin"
+	notesDir := os.Getenv("MATTERBASE_TEST_NOTES_DIR")
+	if notesDir == "" {
+		t.Skip("MATTERBASE_TEST_NOTES_DIR not set")
+	}
 	if info, err := os.Stat(notesDir); err != nil || !info.IsDir() {
-		t.Skip("rhsev tree not available")
+		t.Skip("notes dir not available: " + notesDir)
 	}
 
 	cache, err := os.CreateTemp("", "matterbase-integration-*.jsonl")
