@@ -1,6 +1,6 @@
 // Package theme holds the shared palette and styles for all basekit
 // widgets and apps. The values are carried over from the Textual
-// originals (matterbase / taskbase): Nord background, quiet borders,
+// originals (matterbase): Nord background, quiet borders,
 // one accent for focus, titles and the cursor row.
 package theme
 
