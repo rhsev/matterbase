@@ -222,9 +222,7 @@ promote, audit, …) lives in fileregister's `register` CLI.
 
 matterbase is built on **basekit** (`basekit/`), a small shared Bubble Tea
 foundation — theme, record table, layout frame, inputs — that lives in this
-repo and carries its sibling TUIs. The first sibling is **taskbase**
-(`cmd/taskbase`), a task view over
-[na_json](https://github.com/rhsev/na_json)'s index.
+repo and carries its sibling TUIs.
 
 ## Architecture
 
