@@ -88,6 +88,8 @@ apex_width: 80                 # apex --width value (optional)
 apex_code_highlight: pygments  # apex --code-highlight tool (optional)
 apex_code_highlight_theme: nord  # its theme (optional)
 grubber_search_mode: all       # all | frontmatter | blocks_only  (default: all)
+grubber_mmd: false             # also parse MultiMarkdown metadata headers (optional)
+depth: 2                       # limit directory recursion depth, 0 = no subdirectories (optional)
 array_fields: [tags, keywords] # fields grubber normalises to arrays
 table_columns: [status, project, type]    # column selection + order (omit = auto)
 column_widths: {source: 30, status: 12}   # per-column widths (optional)
