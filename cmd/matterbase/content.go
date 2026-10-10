@@ -93,30 +93,31 @@ func extractMarkdownSection(content string, targetBlockStart int) string {
 	return strings.TrimRightFunc(strings.Join(lines[headingLineIdx:sectionEndIdx], "\n"), unicode.IsSpace)
 }
 
-// pyStr renders a YAML/JSON-decoded value the way Python's str() would,
-// close enough for the fingerprint matching in extractSectionForRecord.
-func pyStr(v any) string {
+// valueString renders a decoded field value as it reads in the note. It
+// serves both the record view and the fingerprint matching in
+// extractSectionForRecord, which compares a record decoded from JSON with
+// a YAML block decoded by yaml.v3. The two decoders disagree on types:
+// JSON gives float64 for 5 where YAML gives int, and YAML turns
+// 2026-10-11 into a time.Time where JSON keeps the string. Both sides
+// must come out as the same text.
+func valueString(v any) string {
 	switch x := v.(type) {
 	case nil:
-		return "None"
-	case bool:
-		if x {
-			return "True"
-		}
-		return "False"
+		return "null"
 	case string:
 		return x
-	case int:
-		return strconv.Itoa(x)
-	case int64:
-		return strconv.FormatInt(x, 10)
 	case float64:
-		if x == math.Trunc(x) && !math.IsInf(x, 0) {
-			return strconv.FormatFloat(x, 'f', 1, 64)
+		if x == math.Trunc(x) && math.Abs(x) < 1e15 {
+			return strconv.FormatInt(int64(x), 10)
 		}
 		return strconv.FormatFloat(x, 'g', -1, 64)
+	case time.Time:
+		if x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 && x.Nanosecond() == 0 {
+			return x.Format(time.DateOnly)
+		}
+		return x.Format(time.RFC3339)
 	default:
-		return fmt.Sprintf("%v", x)
+		return fmt.Sprint(x)
 	}
 }
 
@@ -132,13 +133,13 @@ func extractSectionForRecord(body string, record Record, frontmatterKeys map[str
 	lines := strings.Split(body, "\n")
 	matchFields := map[string]string{}
 	if id, ok := record["id"]; ok && id != nil && !frontmatterKeys["id"] {
-		matchFields["id"] = pyStr(id)
+		matchFields["id"] = valueString(id)
 	} else {
 		for k, v := range record {
 			if strings.HasPrefix(k, "_") || frontmatterKeys[k] || v == nil {
 				continue
 			}
-			matchFields[k] = pyStr(v)
+			matchFields[k] = valueString(v)
 		}
 	}
 	if len(matchFields) == 0 {
@@ -162,7 +163,7 @@ func extractSectionForRecord(body string, record Record, frontmatterKeys map[str
 			for k, want := range matchFields {
 				got := ""
 				if v, ok := blockData[k]; ok {
-					got = pyStr(v)
+					got = valueString(v)
 				}
 				if got != want {
 					match = false

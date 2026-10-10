@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestSourceType(t *testing.T) {
@@ -194,4 +197,35 @@ func TestExtractSectionForRecord(t *testing.T) {
 			t.Errorf("result = %q, want empty", result)
 		}
 	})
+}
+
+func TestValueStringAgreesAcrossDecoders(t *testing.T) {
+	var fromJSON map[string]any
+	if err := json.Unmarshal([]byte(`{"id":5,"amount":12.5,"date":"2026-10-11","ok":true,"none":null}`), &fromJSON); err != nil {
+		t.Fatal(err)
+	}
+	var fromYAML map[string]any
+	if err := yaml.Unmarshal([]byte("id: 5\namount: 12.5\ndate: 2026-10-11\nok: true\nnone: null\n"), &fromYAML); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"id": "5", "amount": "12.5", "date": "2026-10-11", "ok": "true", "none": "null"}
+	for k, w := range want {
+		if got := valueString(fromJSON[k]); got != w {
+			t.Errorf("JSON %s = %q, want %q", k, got, w)
+		}
+		if got := valueString(fromYAML[k]); got != w {
+			t.Errorf("YAML %s = %q, want %q", k, got, w)
+		}
+	}
+}
+
+func TestExtractSectionForRecordWithNumericID(t *testing.T) {
+	var rec Record
+	if err := json.Unmarshal([]byte(`{"id":5}`), &rec); err != nil {
+		t.Fatal(err)
+	}
+	body := "## Five\n\n```yaml\nid: 5\n```\n"
+	if got := extractSectionForRecord(body, rec, map[string]bool{}); !strings.Contains(got, "## Five") {
+		t.Errorf("section = %q, want the block under ## Five", got)
+	}
 }

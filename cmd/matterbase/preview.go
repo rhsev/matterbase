@@ -49,11 +49,11 @@ func renderRecordFields(record Record) string {
 		if arr, ok := v.([]any); ok {
 			parts := make([]string, len(arr))
 			for i, x := range arr {
-				parts[i] = pyStr(x)
+				parts[i] = valueString(x)
 			}
 			s = strings.Join(parts, ", ")
 		} else {
-			s = pyStr(v)
+			s = valueString(v)
 		}
 		lines = append(lines, theme.Title.Render(k)+"  "+s)
 	}
