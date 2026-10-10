@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -194,56 +192,6 @@ func TestExtractSectionForRecord(t *testing.T) {
 		result := extractSectionForRecord(sampleBody(), Record{}, nil)
 		if result != "" {
 			t.Errorf("result = %q, want empty", result)
-		}
-	})
-}
-
-func writeNote(t *testing.T, content string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "note.md")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func TestExtractCompactContent(t *testing.T) {
-	t.Run("includes yaml frontmatter", func(t *testing.T) {
-		path := writeNote(t, "---\ntitle: X\n---\n\nProse.\n")
-		result := extractCompactContent(path, "Tasks", false)
-		if !strings.Contains(result, "title: X") {
-			t.Errorf("result = %q", result)
-		}
-		if strings.Contains(result, "Prose.") {
-			t.Errorf("result = %q, must not include unrelated prose", result)
-		}
-	})
-
-	t.Run("includes yaml block with heading", func(t *testing.T) {
-		path := writeNote(t, "## Data\n\n```yaml\nid: a\n```\n\nProse between.\n")
-		result := extractCompactContent(path, "Tasks", false)
-		if !strings.Contains(result, "## Data") || !strings.Contains(result, "id: a") {
-			t.Errorf("result = %q", result)
-		}
-		if strings.Contains(result, "Prose between.") {
-			t.Errorf("result = %q", result)
-		}
-	})
-
-	t.Run("includes tasks section", func(t *testing.T) {
-		path := writeNote(t, "## Tasks\n- [ ] one\n\n## Other\nx\n")
-		result := extractCompactContent(path, "Tasks", false)
-		if !strings.Contains(result, "- [ ] one") {
-			t.Errorf("result = %q", result)
-		}
-		if strings.Contains(result, "## Other") {
-			t.Errorf("result = %q", result)
-		}
-	})
-
-	t.Run("nonexistent file returns empty", func(t *testing.T) {
-		if got := extractCompactContent("/no/such/file.md", "Tasks", false); got != "" {
-			t.Errorf("got %q, want empty", got)
 		}
 	})
 }

@@ -714,13 +714,19 @@ func (m appModel) updatePicking(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 // Layout
 // ---------------------------------------------------------------------------
 
-func (m *appModel) applyLayout() {
-	s := frame.Compute(frame.Config{
+// sizes computes the pane sizes for the current terminal and preview
+// visibility — the one place the layout's proportions are set.
+func (m appModel) sizes() frame.Sizes {
+	return frame.Compute(frame.Config{
 		ShowTopbar: true, TopbarHeight: 1,
 		ShowBuilder: true, BuilderWidth: 30,
 		ShowPreview: m.prev.Visible(), PreviewPct: 0.4, PreviewMax: 80,
 		StatusHeight: 2, // status line + a key-bindings hint line beneath it
 	}, m.width, m.height)
+}
+
+func (m *appModel) applyLayout() {
+	s := m.sizes()
 
 	m.table.SetSize(frame.Inner(s.TableWidth), frame.Inner(s.MainHeight))
 	if s.PreviewWidth > 0 {
@@ -811,12 +817,7 @@ func (m appModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	s := frame.Compute(frame.Config{
-		ShowTopbar: true, TopbarHeight: 1,
-		ShowBuilder: true, BuilderWidth: 30,
-		ShowPreview: m.prev.Visible(), PreviewPct: 0.4, PreviewMax: 80,
-		StatusHeight: 2, // status line + a key-bindings hint line beneath it
-	}, m.width, m.height)
+	s := m.sizes()
 
 	// MaxWidth truncates instead of wrapping (Width would word-wrap a
 	// long yank command across several lines and break the fixed-height
