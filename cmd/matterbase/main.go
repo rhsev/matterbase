@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -206,16 +207,19 @@ func (m appModel) Init() tea.Cmd {
 type refreshRequestMsg struct{}
 
 // ---------------------------------------------------------------------------
-// Pipeline plumbing — mirrors app.py's _refresh_data (rescan) / _run_query
-// (cache replay). Each request carries the current generation; a result
-// whose generation is stale (a newer request started since) is dropped —
-// Textual's run_worker(exclusive=True) via a counter instead of cancellation.
+// Pipeline plumbing. A rescan (refreshCmd) extracts the notes into the
+// JSONL cache and queries it; a query change (runQueryCmd) only replays
+// the cache. Each request carries the current generation; a result whose
+// generation is stale (a newer request started since) is dropped.
 // ---------------------------------------------------------------------------
 
 type pipelineDoneMsg struct {
-	gen         int
-	result      PipelineResult
-	rebuiltFrom string // non-empty when this came from a rescan, resets fulltextCache
+	gen    int
+	result PipelineResult
+	// fulltextCache is the request's own copy of the full-text file
+	// cache, grown by this run. Requests overlap, so none may write into
+	// the map the model holds; the current result's copy replaces it.
+	fulltextCache map[string]string
 }
 
 func (m *appModel) buildCommand() string {
@@ -231,18 +235,20 @@ func (m *appModel) refreshCmd() tea.Cmd {
 	notesDir, cachePath := m.notesDir, m.cachePath
 	opts := ExtractOpts{SearchMode: m.searchMode, MMD: m.mmd, Depth: m.depth, CollectionDir: m.collectionDir}
 	arrayFields := m.arrayFields
-	state := m.state
+	state := m.state.clone()
 	return func() tea.Msg {
 		var errMsg string
+		// A rescan starts an empty file cache: the files may have changed.
+		cache := map[string]string{}
 		ok := extractToJSONL(notesDir, cachePath, opts, func(s string) { errMsg = s })
 		result := PipelineResult{}
 		if ok {
-			result = runPipeline(cachePath, &state, arrayFields, map[string]string{}, func(s string) { errMsg = s })
+			result = runPipeline(cachePath, &state, arrayFields, cache, func(s string) { errMsg = s })
 		}
 		if result.Error == "" {
 			result.Error = errMsg
 		}
-		return pipelineDoneMsg{gen: gen, result: result, rebuiltFrom: cachePath}
+		return pipelineDoneMsg{gen: gen, result: result, fulltextCache: cache}
 	}
 }
 
@@ -251,15 +257,15 @@ func (m *appModel) runQueryCmd() tea.Cmd {
 	gen := m.gen
 	cachePath := m.cachePath
 	arrayFields := m.arrayFields
-	state := m.state
-	cache := m.fulltextCache
+	state := m.state.clone()
+	cache := maps.Clone(m.fulltextCache)
 	return func() tea.Msg {
 		var errMsg string
 		result := runPipeline(cachePath, &state, arrayFields, cache, func(s string) { errMsg = s })
 		if result.Error == "" {
 			result.Error = errMsg
 		}
-		return pipelineDoneMsg{gen: gen, result: result}
+		return pipelineDoneMsg{gen: gen, result: result, fulltextCache: cache}
 	}
 }
 
@@ -267,8 +273,8 @@ func (m *appModel) finishQuery(msg pipelineDoneMsg) {
 	if msg.gen != m.gen {
 		return
 	}
-	if msg.rebuiltFrom != "" {
-		m.fulltextCache = map[string]string{}
+	if msg.fulltextCache != nil {
+		m.fulltextCache = msg.fulltextCache
 	}
 	m.table.SetRecords(msg.result.Records)
 	m.formField.SetOptions(formFieldKeys(msg.result.Records))
@@ -308,7 +314,9 @@ func (m *appModel) updatePreview() {
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.picking {
-		return m.updatePicking(msg)
+		if model, cmd, handled := m.updatePicking(msg); handled {
+			return model, cmd
+		}
 	}
 
 	switch msg := msg.(type) {
@@ -352,17 +360,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	// Routed by source, not focus: Esc within the debounce window moves
+	// focus away, but the typed term still has to reach the query.
 	case input.Changed:
-		switch m.focus {
-		case focusFilename:
+		switch msg.ID {
+		case m.filenameIn.ID():
 			m.state.FilenameTerm = msg.Value
-		case focusFulltext:
+		case m.fulltextIn.ID():
 			m.state.FulltextTerm = msg.Value
 		}
 		return m, nil
 
 	case input.Debounced:
-		if m.focus == focusFilename || m.focus == focusFulltext {
+		if msg.ID == m.filenameIn.ID() || msg.ID == m.fulltextIn.ID() {
 			return m, m.runQueryCmd()
 		}
 		return m, nil
@@ -374,15 +384,25 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 	}
 
-	return m, nil
+	return m.forwardToInputs(msg)
 }
 
-// handleSubmitted fires on Enter in any builder text input. SQL and the
-// form's value field also run the query; everything else (filename,
-// fulltext) just returns focus to the table — same fallthrough as
-// app.py's on_input_submitted. The form only returns focus on success
-// (a built clause): on failure the user stays put to fix it, matching
-// _apply_sql_form's early return.
+// forwardToInputs hands every message the app doesn't handle itself to
+// the text inputs: their debounce ticks and cursor blinks come back
+// through here. Each input ignores what isn't its own.
+func (m appModel) forwardToInputs(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmds := make([]tea.Cmd, 4)
+	m.sqlIn, cmds[0] = m.sqlIn.Update(msg)
+	m.formValue, cmds[1] = m.formValue.Update(msg)
+	m.filenameIn, cmds[2] = m.filenameIn.Update(msg)
+	m.fulltextIn, cmds[3] = m.fulltextIn.Update(msg)
+	return m, tea.Batch(cmds...)
+}
+
+// handleSubmitted fires on Enter in any builder text input: it runs the
+// query right away, without waiting for the debounce, and returns focus
+// to the table. The SQL form only does so on success (a built clause);
+// on failure the user stays put to fix the input.
 func (m appModel) handleSubmitted(msg input.Submitted) (tea.Model, tea.Cmd) {
 	if m.focus == focusFormValue {
 		clause := buildClause(m.formField.Value(), m.formOp.Value(), msg.Value)
@@ -399,8 +419,15 @@ func (m appModel) handleSubmitted(msg input.Submitted) (tea.Model, tea.Cmd) {
 	}
 
 	var queryCmd tea.Cmd
-	if m.focus == focusSQL {
+	switch m.focus {
+	case focusSQL:
 		m.state.SQLWhere = msg.Value
+		queryCmd = m.runQueryCmd()
+	case focusFilename:
+		m.state.FilenameTerm = msg.Value
+		queryCmd = m.runQueryCmd()
+	case focusFulltext:
+		m.state.FulltextTerm = msg.Value
 		queryCmd = m.runQueryCmd()
 	}
 	focusCmd := m.setFocus(focusTable)
@@ -624,22 +651,25 @@ func (m *appModel) openPicker() {
 	m.picking = true
 }
 
-func (m appModel) updatePicking(msg tea.Msg) (tea.Model, tea.Cmd) {
+// updatePicking takes the keys and toggles while the column picker is
+// open. Everything else (query results, resizes, debounce ticks) is left
+// to the regular Update, so it isn't lost behind the overlay.
+func (m appModel) updatePicking(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "c", "esc", "q":
 			m.picking = false
-			return m, nil
+			return m, nil, true
 		}
 		var cmd tea.Cmd
 		m.picker, cmd = m.picker.Update(msg)
-		return m, cmd
+		return m, cmd, true
 	case togglelist.Toggled:
 		m.table.SetColumnOverride(m.picker.ActiveLabels())
-		return m, nil
+		return m, nil, true
 	}
-	return m, nil
+	return m, nil, false
 }
 
 // ---------------------------------------------------------------------------

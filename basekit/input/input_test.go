@@ -124,3 +124,30 @@ func TestBorderColorTracksFocusAndWarning(t *testing.T) {
 		t.Error("focused Warning input should use the warning border")
 	}
 }
+
+func TestTickFromAnotherInputIsIgnored(t *testing.T) {
+	a := New(Config{Debounce: time.Millisecond})
+	b := New(Config{Debounce: time.Millisecond})
+	a.Focus()
+	b.Focus()
+	cmdA := typeRune(t, &a, 'x')
+	typeRune(t, &b, 'y') // same generation as a's tick
+
+	for _, msg := range runCmds(cmdA) {
+		tick, ok := msg.(tickMsg)
+		if !ok {
+			continue
+		}
+		if _, out := b.Update(tick); out != nil {
+			t.Errorf("b answered a's tick: %#v", out())
+		}
+		_, out := a.Update(tick)
+		deb, ok := out().(Debounced)
+		if !ok || deb.ID != a.ID() || deb.Value != "x" {
+			t.Errorf("a's tick gave %#v, want Debounced{ID: %d, Value: \"x\"}", out(), a.ID())
+		}
+	}
+	if a.ID() == b.ID() {
+		t.Error("two inputs share an ID")
+	}
+}

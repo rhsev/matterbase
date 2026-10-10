@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,6 +32,13 @@ type QueryState struct {
 	SQLWhere     string
 	FilenameTerm string
 	FulltextTerm string
+}
+
+// clone copies the state for a background query. Presets is copied too:
+// the UI toggles Active in place while the query reads it.
+func (q QueryState) clone() QueryState {
+	q.Presets = slices.Clone(q.Presets)
+	return q
 }
 
 // ActiveExpressions flattens every active preset's expressions into one

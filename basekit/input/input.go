@@ -5,8 +5,10 @@
 package input
 
 import (
+	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -29,28 +31,41 @@ type Config struct {
 	Warning bool
 }
 
-// Changed is emitted on every keystroke, mirroring Textual's
-// Input.Changed — apps use it to update their own state immediately
-// (e.g. state.filename_term) even though the query re-run waits for
-// Debounced.
-type Changed struct{ Value string }
+// Changed is emitted on every keystroke — apps use it to update their
+// own state immediately (e.g. the filename term) even though the query
+// re-run waits for Debounced. ID names the emitting input (Model.ID), so
+// an app with several inputs routes by source, not by whichever input
+// has focus by the time the message arrives.
+type Changed struct {
+	ID    int
+	Value string
+}
 
 // Debounced is emitted DefaultDebounce after the last Changed with no
-// further edits — the signal to actually re-run a query.
-type Debounced struct{ Value string }
+// further edits — the signal to actually re-run a query. ID as in
+// Changed.
+type Debounced struct {
+	ID    int
+	Value string
+}
 
-// Submitted is emitted immediately on Enter, bypassing the debounce —
-// matterbase's on_input_submitted.
+// Submitted is emitted immediately on Enter, bypassing the debounce.
 type Submitted struct{ Value string }
 
+// tickMsg carries the input's id: an app forwards every non-key message
+// to all of its inputs, and generations alone collide across inputs.
 type tickMsg struct {
+	id    int
 	gen   int
 	value string
 }
 
+var lastID atomic.Int64
+
 // Model is the widget. Use New, mount it in the app model, and forward
 // tea.Msg through Update like any other Bubble Tea component.
 type Model struct {
+	id       int
 	ti       textinput.Model
 	cfg      Config
 	width    int
@@ -66,10 +81,16 @@ func New(cfg Config) Model {
 		cfg.Debounce = DefaultDebounce
 	}
 	ti := textinput.New()
+	// A static cursor: a blinking one redraws the whole app frame twice a
+	// second for nothing.
+	ti.Cursor.SetMode(cursor.CursorStatic)
 	ti.Placeholder = cfg.Placeholder
 	ti.Width = cfg.Width - 2 // border consumes 2 columns
-	return Model{ti: ti, cfg: cfg, width: cfg.Width, debounce: cfg.Debounce}
+	return Model{id: int(lastID.Add(1)), ti: ti, cfg: cfg, width: cfg.Width, debounce: cfg.Debounce}
 }
+
+// ID identifies this input in its Changed and Debounced messages.
+func (m Model) ID() int { return m.id }
 
 func (m *Model) Focus() tea.Cmd { return m.ti.Focus() }
 func (m *Model) Blur()          { m.ti.Blur() }
@@ -87,8 +108,8 @@ func (m *Model) SetWidth(w int) {
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if tick, ok := msg.(tickMsg); ok {
-		if tick.gen == m.gen {
-			return m, func() tea.Msg { return Debounced{Value: tick.value} }
+		if tick.id == m.id && tick.gen == m.gen {
+			return m, func() tea.Msg { return Debounced{ID: m.id, Value: tick.value} }
 		}
 		return m, nil
 	}
@@ -105,10 +126,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	m.gen++
-	gen, value, debounce := m.gen, m.ti.Value(), m.debounce
-	changed := func() tea.Msg { return Changed{Value: value} }
+	id, gen, value, debounce := m.id, m.gen, m.ti.Value(), m.debounce
+	changed := func() tea.Msg { return Changed{ID: id, Value: value} }
 	tick := tea.Tick(debounce, func(time.Time) tea.Msg {
-		return tickMsg{gen: gen, value: value}
+		return tickMsg{id: id, gen: gen, value: value}
 	})
 	return m, tea.Batch(cmd, changed, tick)
 }
