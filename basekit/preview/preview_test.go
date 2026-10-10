@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -70,4 +71,35 @@ func TestSetSizeNeverNegative(t *testing.T) {
 	if m.vp.Height != 0 {
 		t.Errorf("viewport height = %d, want 0 (clamped, not negative)", m.vp.Height)
 	}
+}
+
+func TestScrollAndResetOnNewContent(t *testing.T) {
+	m := New()
+	m.SetSize(40, 7) // 5 body lines below title + blank line
+	lines := make([]string, 30)
+	for i := range lines {
+		lines[i] = "line" + strconv.Itoa(i)
+	}
+	m.SetContent(strings.Join(lines, "\n"))
+
+	m.ScrollLines(3)
+	if got := firstBodyLine(m); got != "line3" {
+		t.Errorf("after ScrollLines(3) first line = %q, want line3", got)
+	}
+	m.ScrollPages(1)
+	if got := firstBodyLine(m); got != "line8" {
+		t.Errorf("after ScrollPages(1) first line = %q, want line8", got)
+	}
+	m.ScrollLines(-2)
+	if got := firstBodyLine(m); got != "line6" {
+		t.Errorf("after ScrollLines(-2) first line = %q, want line6", got)
+	}
+	m.SetContent(strings.Join(lines, "\n"))
+	if got := firstBodyLine(m); got != "line0" {
+		t.Errorf("new content must start at the top, first line = %q", got)
+	}
+}
+
+func firstBodyLine(m Model) string {
+	return strings.TrimSpace(strings.Split(m.View(), "\n")[2])
 }

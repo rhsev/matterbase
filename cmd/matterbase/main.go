@@ -571,6 +571,20 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		m.openPicker()
 		return m, nil
+	case "J", "K", "ctrl+f", "ctrl+b":
+		if m.prev.Visible() {
+			switch msg.String() {
+			case "J":
+				m.prev.ScrollLines(1)
+			case "K":
+				m.prev.ScrollLines(-1)
+			case "ctrl+f":
+				m.prev.ScrollPages(1)
+			case "ctrl+b":
+				m.prev.ScrollPages(-1)
+			}
+		}
+		return m, nil
 	case "/":
 		cmd := m.setFocus(focusSQL)
 		return m, cmd
@@ -735,7 +749,7 @@ var (
 // first so a narrow terminal's clampWidth truncation still leaves the
 // essentials.
 var footerHints = []struct{ key, desc string }{
-	{"q", "quit"}, {"y/Y", "yank(+quit)"}, {"m", "mode"}, {"p", "preview"},
+	{"q", "quit"}, {"y/Y", "yank(+quit)"}, {"m", "mode"}, {"p", "preview"}, {"J/K", "scroll"},
 	{"tab", "focus"}, {"esc", "table"}, {"/", "sql"}, {"f", "filename"},
 	{"t", "fulltext"}, {"c", "columns"}, {"-", "clear clause"}, {"r/R", "refresh/reload"},
 }

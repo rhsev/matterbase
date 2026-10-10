@@ -1,14 +1,13 @@
 // Package preview provides the adaptive preview pane's chrome: a title
 // line ("title · mode"), a scrollable ANSI viewport, and a visibility
 // toggle. It wraps bubbles/viewport; the content itself — whole/compact/
-// record rendering, apex/bat invocation — is app logic (matterbase-go's
+// record rendering, apex/bat invocation — is app logic (matterbase's
 // preview.go), not this package's job. Like recordtable, preview doesn't
 // draw its own border box; the app wraps View()'s output in theme.Pane.
 package preview
 
 import (
 	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/rhsev/matterbase/basekit/theme"
 )
@@ -33,10 +32,25 @@ func (m *Model) SetTitle(title, mode string) {
 	m.mode = mode
 }
 
-// SetContent replaces the viewport body. Content must already be wrapped
-// to the current width — apex/bat take a width flag for this, the
-// viewport does not re-wrap ANSI content on its own.
-func (m *Model) SetContent(ansi string) { m.vp.SetContent(ansi) }
+// SetContent replaces the viewport body and scrolls back to the top. Content
+// must already be wrapped to the current width — apex/bat take a width flag
+// for this, the viewport does not re-wrap ANSI content on its own.
+func (m *Model) SetContent(ansi string) {
+	m.vp.SetContent(ansi)
+	m.vp.GotoTop()
+}
+
+// ScrollLines scrolls by n lines, down for positive n, up for negative.
+func (m *Model) ScrollLines(n int) {
+	if n > 0 {
+		m.vp.ScrollDown(n)
+	} else {
+		m.vp.ScrollUp(-n)
+	}
+}
+
+// ScrollPages scrolls by n pages, down for positive n, up for negative.
+func (m *Model) ScrollPages(n int) { m.ScrollLines(n * max(m.vp.Height, 1)) }
 
 // Toggle flips visibility — matterbase's action_toggle_preview (key p).
 func (m *Model) Toggle() { m.visible = !m.visible }
@@ -50,15 +64,6 @@ func (m Model) Visible() bool { return m.visible }
 func (m *Model) SetSize(w, h int) {
 	m.vp.Width = w
 	m.vp.Height = max(h-2, 0)
-}
-
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	if !m.visible {
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.vp, cmd = m.vp.Update(msg)
-	return m, cmd
 }
 
 // View renders the title line and viewport, or "" when hidden — hidden

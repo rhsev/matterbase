@@ -139,6 +139,8 @@ yanked command reproduces exactly what the table shows.
 | `c`            | Pick the table columns                                  |
 | `m`            | Cycle preview mode: whole → compact → record            |
 | `p`            | Toggle preview pane                                     |
+| `J` / `K`      | Scroll the preview one line down / up                   |
+| `Ctrl+F` / `Ctrl+B` | Scroll the preview one page down / up              |
 | `r`            | Refresh data (re-scan the notes dir)                    |
 | `R`            | Reload the config (columns, presets, … — query survives)|
 | `y`            | Copy the constructed pipeline to the clipboard          |
