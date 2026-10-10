@@ -1,4 +1,4 @@
-// Config loading — port of matterbase's app.py read_config/load_config.
+// Config loading and validation.
 package main
 
 import (
@@ -57,7 +57,7 @@ func expandUser(path string) string {
 
 // readConfig reads and validates the config. Returns (config, "") or
 // (nil, error) — non-exiting so the app can reload in-session and keep
-// the old config on failure (action_reload_config, key R).
+// the old config on failure (key R).
 func readConfig(path string) (*Config, string) {
 	expanded := expandUser(path)
 	data, err := os.ReadFile(expanded)

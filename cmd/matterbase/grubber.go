@@ -1,4 +1,4 @@
-// grubber subprocess integration — port of matterbase's grubber_client.py.
+// grubber subprocess integration.
 package main
 
 import (

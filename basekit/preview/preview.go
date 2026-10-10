@@ -52,7 +52,7 @@ func (m *Model) ScrollLines(n int) {
 // ScrollPages scrolls by n pages, down for positive n, up for negative.
 func (m *Model) ScrollPages(n int) { m.ScrollLines(n * max(m.vp.Height, 1)) }
 
-// Toggle flips visibility — matterbase's action_toggle_preview (key p).
+// Toggle flips visibility.
 func (m *Model) Toggle() { m.visible = !m.visible }
 
 // Visible reports whether the pane is currently shown.

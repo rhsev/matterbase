@@ -1,6 +1,6 @@
-// matterbase-go: the unified record-query view, ported from the Python
-// original onto basekit. builder | records | adaptive preview, a
-// yankable grubber | duckdb pipeline, in-session JSONL cache.
+// matterbase: the unified record-query view on basekit. builder |
+// records | adaptive preview, a yankable grubber | duckdb pipeline,
+// in-session JSONL cache.
 package main
 
 import (
@@ -33,9 +33,8 @@ const version = "0.7.1"
 
 type focusZone int
 
-// Order matches app.py's compose(): builder fields top to bottom, table
-// last (it's mounted after the builder column and the preview pane,
-// which isn't focusable). focusOrder below is the Tab ring itself.
+// Builder fields top to bottom, then the table. The preview pane takes
+// no focus. focusOrder below is the Tab ring itself.
 const (
 	focusPresets focusZone = iota
 	focusSQL
@@ -118,10 +117,8 @@ func newAppModel(cfg *Config) appModel {
 	m.presets = togglelist.New(presetItems(m.state.Presets))
 	m.sqlIn = input.New(input.Config{Placeholder: "status != 'done'"})
 	m.sqlIn.SetValue(m.state.SQLWhere)
-	// AllowClear: matches Textual's Select, which starts blank until the
-	// user actively picks a field/operator (form-op has no blank entry
-	// in its option list either, but Select.BLANK is still its initial
-	// value in app.py — nothing pre-selects it).
+	// AllowClear: field and operator start blank until the user picks
+	// one; nothing is pre-selected.
 	m.formField = cycler.New(cycler.Config{Placeholder: "field", AllowClear: true})
 	m.formOp = cycler.New(cycler.Config{Options: sqlFormOperatorOrder, Placeholder: "op", AllowClear: true})
 	m.formValue = input.New(input.Config{Placeholder: "value ⏎"})
@@ -192,8 +189,8 @@ func presetItems(presets []Preset) []togglelist.Item {
 	return items
 }
 
-// formFieldKeys mirrors app.py's _update_form_fields: every non-"_" key
-// across the current records, sorted. Unlike recordtable's column
+// formFieldKeys lists every non-"_" key across the current records,
+// sorted. Unlike recordtable's column
 // inference this doesn't drop all-nil fields — the form is just a
 // starting point for a clause, the field doesn't need an existing value.
 func formFieldKeys(records []Record) []string {
@@ -462,10 +459,8 @@ func (m *appModel) blurInput() {
 	m.inputFocus.Blur()
 }
 
-// focusOrder is the Tab ring, the builder column's fields plus the
-// table, standing in for Textual's automatic tab chain (which cycled
-// every focusable widget; basekit's presets are one togglelist stop,
-// not one per preset).
+// focusOrder is the Tab ring: the builder column's fields plus the
+// table. The presets are one stop, not one per preset.
 var focusOrder = []focusZone{
 	focusPresets, focusSQL, focusFormField, focusFormOp, focusFormValue,
 	focusFilename, focusFulltext, focusTable,

@@ -35,9 +35,9 @@ type Config struct {
 	// Columns fixes the column order; keys absent from the current record
 	// set are dropped. Empty means: infer from the records.
 	//
-	// Inferred order is alphabetical, not the Python original's first-seen
-	// order — Go maps don't preserve key order, so records arriving as
-	// map[string]any have already lost it. Configs that care set Columns.
+	// Inferred order is alphabetical, not first-seen: Go maps don't
+	// preserve key order, so records arriving as map[string]any have
+	// already lost it. Configs that care set Columns.
 	Columns []string
 	// Widths overrides the width per column key (including the lead
 	// column's title). DefaultWidth applies otherwise.
@@ -86,8 +86,8 @@ func New(cfg Config) Model {
 }
 
 // SetRecords replaces the record set, re-derives the columns and clamps
-// the cursor to the previous row (the Textual original's behaviour, so a
-// refresh doesn't throw the user back to the top).
+// the cursor to the previous row, so a refresh doesn't throw the user
+// back to the top.
 //
 // There is no horizontal scrolling (bubbles/table can't), so the shown
 // columns are capped to what fits the current width (see SetSize): with
@@ -340,8 +340,8 @@ func inferColumns(recs []Record, explicit []string) []string {
 	return keys
 }
 
-// cellString renders a field value like the Python original's str():
-// nil becomes empty, everything else goes through fmt. Newlines are
+// cellString renders a field value for a table cell: nil becomes empty,
+// everything else goes through fmt. Newlines are
 // flattened so multiline YAML values can't break the row layout.
 func cellString(v any) string {
 	if v == nil {

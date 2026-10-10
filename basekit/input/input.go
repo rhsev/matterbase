@@ -1,7 +1,7 @@
 // Package input wraps bubbles/textinput with the basekit chrome: a
 // bordered box (quiet border, accent on focus), a debounced Debounced
 // message for live-filter fields, and an immediate Submitted message for
-// Enter — matterbase's #sql / #filename / #fulltext inputs.
+// Enter.
 package input
 
 import (
@@ -16,7 +16,8 @@ import (
 	"github.com/rhsev/matterbase/basekit/theme"
 )
 
-// DefaultDebounce matches matterbase's set_timer(0.25, self._run_query).
+// DefaultDebounce is the pause after the last keystroke before Debounced
+// fires.
 const DefaultDebounce = 250 * time.Millisecond
 
 // Config controls one input's chrome and behaviour. The zero value is

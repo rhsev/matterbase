@@ -1,5 +1,5 @@
-// Content extraction and rendering — port of matterbase's content.py.
-// Pure functions plus apex/bat subprocess rendering; no TUI dependency.
+// Content extraction and rendering: pure functions plus apex/bat
+// subprocess rendering; no TUI dependency.
 package main
 
 import (

@@ -1,9 +1,7 @@
 // Package exec provides the subprocess plumbing basekit apps share:
-// a timeout-bounded runner with stderr-first-line error extraction (port
-// of grubber_client._run_grubber_cmd), clipboard copy, and opening a
-// path in $EDITOR — as a zellij/tmux pane when available, otherwise by
-// suspending the Bubble Tea program (port of app.py's
-// on_data_table_row_selected).
+// a timeout-bounded runner with stderr-first-line error extraction,
+// clipboard copy, and opening a path in $EDITOR — as a zellij/tmux pane
+// when available, otherwise by suspending the Bubble Tea program.
 package exec
 
 import (
@@ -20,18 +18,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// DefaultTimeout matches grubber_client's subprocess.run(timeout=15).
+// DefaultTimeout applies when Run is given no timeout.
 const DefaultTimeout = 15 * time.Second
 
-// maxErrLen matches the [:120] truncation on grubber's stderr in the
-// Python original.
+// maxErrLen keeps an error message short enough for a status bar.
 const maxErrLen = 120
 
 // Run executes name with args and returns stdout on success. On a
 // non-zero exit, timeout, or launch failure, the error message is the
 // first line of stderr (or the exec error, if stderr was empty),
-// truncated to 120 runes — the same shape status bars across the Python
-// originals expect.
+// truncated to 120 runes so it fits a status bar.
 func Run(ctx context.Context, timeout time.Duration, env []string, name string, args ...string) ([]byte, error) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -79,9 +75,8 @@ func truncate(s string, n int) string {
 
 // Copy copies text to the system clipboard using the first available
 // tool for the platform: pbcopy on macOS, wl-copy under Wayland,
-// otherwise xclip or xsel. Returns an error if none is found — the
-// Python original silently does nothing instead, but a Go caller can
-// choose to surface or ignore it.
+// otherwise xclip or xsel. Returns an error if none is found or the tool
+// fails.
 func Copy(text string) error {
 	var candidates [][]string
 	switch {
@@ -109,15 +104,14 @@ func Copy(text string) error {
 
 // EditorClosed is emitted once the editor opened via OpenEditor returns
 // control — via a suspended Bubble Tea program, or a fire-and-forget
-// zellij/tmux launch (Err is always nil in the latter case, matching the
-// Python original's check=False).
+// zellij/tmux launch (Err is always nil in the latter case: the pane's
+// exit is not observed).
 type EditorClosed struct{ Err error }
 
 // OpenEditor returns a tea.Cmd that opens path in editor. Inside zellij
 // or tmux it spawns a new pane/window and returns immediately, so the
 // TUI keeps running underneath. Otherwise it suspends the program via
-// tea.ExecProcess so the editor gets the terminal — port of app.py's
-// on_data_table_row_selected.
+// tea.ExecProcess so the editor gets the terminal.
 func OpenEditor(editor, path string) tea.Cmd {
 	switch {
 	case os.Getenv("ZELLIJ") != "":

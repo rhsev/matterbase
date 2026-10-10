@@ -25,8 +25,8 @@ type Config struct {
 
 	// AllowClear enables an unselected state (Value() == "") reachable
 	// via Backspace/Delete in addition to left/right cycling, and starts
-	// there instead of at the first option — matching Textual Select's
-	// blank prompt state. Off by default: use it for an optional choice
+	// there instead of at the first option, like a select's blank
+	// prompt. Off by default: use it for an optional choice
 	// the app should treat as "not set" until the user actively picks
 	// something (matterbase's SQL-form field/operator cyclers); leave it
 	// off for a control that should always carry some value.
@@ -77,8 +77,8 @@ func (m Model) Options() []string { return m.options }
 // SetOptions replaces the option list. The current value stays selected
 // if it's still present (e.g. a field cycler surviving a query re-run
 // that keeps the same columns). Otherwise: with AllowClear, selection
-// resets to no selection (mirroring Textual's Select, which never
-// jumps out of its blank state on its own); without it, to the first
+// resets to no selection (a blank choice never fills itself in);
+// without it, to the first
 // option, or to no selection if the list is now empty.
 func (m *Model) SetOptions(opts []string) {
 	current := m.Value()

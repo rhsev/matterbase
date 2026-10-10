@@ -1,8 +1,7 @@
 // Package frame provides the three-zone layout shared by basekit apps:
 // an optional topbar, a main row (optional builder column | table 1fr |
-// optional preview column), and a statusbar. It ports matterbase's CSS
-// grid (app.py: #query-bar / #main / #status) into plain arithmetic —
-// there is no layout engine here, just the sizing matterbase already had.
+// optional preview column), and a statusbar. There is no layout engine
+// here, just plain arithmetic over the terminal size.
 package frame
 
 import (
@@ -144,10 +143,9 @@ func JoinColumn(topbar, main, status string) string {
 }
 
 // InputFocus tracks whether an input-like widget (text input, select, …)
-// currently owns focus — matterbase's _input_focused. While active, the
-// app routes key messages to the focused widget and skips its own global
-// bindings; Esc calls Blur and returns focus to the table
-// (action_focus_records).
+// currently owns focus. While active, the app routes key messages to the
+// focused widget and skips its own global bindings; Esc calls Blur and
+// returns focus to the table.
 type InputFocus struct {
 	active bool
 }

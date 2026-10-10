@@ -1,7 +1,6 @@
-// Adaptive preview rendering — port of matterbase's preview.py. One
-// global mode (whole/compact/record) applied to whichever record is
-// selected, adapted by the record's source type. Rich markup is replaced
-// with lipgloss ANSI styling since the TUI side has no Rich renderer.
+// Adaptive preview rendering. One global mode (whole/compact/record)
+// applied to whichever record is selected, adapted by the record's source
+// type.
 package main
 
 import (

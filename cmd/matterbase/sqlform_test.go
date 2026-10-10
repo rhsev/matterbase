@@ -114,7 +114,7 @@ func TestSQLFormWithoutOperatorShowsErrorAndKeepsFocus(t *testing.T) {
 
 	m.formField.SetOptions([]string{"status"})
 	m.formField, _ = m.formField.Update(tea.KeyMsg{Type: tea.KeyRight})
-	// formOp is untouched, starts blank — matches Textual's Select.
+	// formOp is untouched and starts blank.
 	m.focus = focusFormValue
 
 	updated, cmd := m.handleSubmitted(input.Submitted{Value: "active"})

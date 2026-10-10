@@ -1,4 +1,4 @@
-// The constructed query — port of matterbase's query.py. QueryState holds
+// The constructed query. QueryState holds
 // the three channels: grubber presets ("-f" expressions), SQL WHERE
 // (filename search folded in), and full-text (display only, never
 // yanked — grubber | duckdb cannot express it).
@@ -84,8 +84,8 @@ func (q *QueryState) FulltextActive() bool {
 	return strings.TrimSpace(q.FulltextTerm) != ""
 }
 
-// BuildCommandOpts are the session settings BuildCommand needs — the
-// config-derived values app.py keeps on self.
+// BuildCommandOpts are the config-derived session settings BuildCommand
+// needs.
 type BuildCommandOpts struct {
 	SearchMode    string
 	MMD           bool
@@ -96,8 +96,8 @@ type BuildCommandOpts struct {
 }
 
 // BuildCommand renders the yankable `grubber … | duckdb 'SQL'` pipeline.
-// Full-text is deliberately absent (decision 1: yank ≠ displayed set
-// when full-text is active).
+// Full-text is deliberately absent: grubber | duckdb cannot express it,
+// so with full-text active the yank yields more records than shown.
 func (q *QueryState) BuildCommand(notesDir string, opts BuildCommandOpts) string {
 	var parts []string
 	if opts.GrubberSet != "" {
@@ -137,8 +137,8 @@ func (q *QueryState) BuildCommand(notesDir string, opts BuildCommandOpts) string
 	return cmd
 }
 
-// shellQuote is Go's shlex.quote: return s unchanged if it's already
-// shell-safe, else single-quote it (escaping embedded quotes).
+// shellQuote returns s unchanged if it's already shell-safe, else
+// single-quotes it (escaping embedded quotes).
 func shellQuote(s string) string {
 	if s == "" {
 		return "''"
@@ -162,7 +162,7 @@ var dquoteEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "`", "\\
 // ---------------------------------------------------------------------------
 
 // sqlFormOperatorOrder is the order the SQL form's operator cycler
-// steps through — matches the Python original's SQL_FORM_OPERATORS tuple.
+// steps through.
 var sqlFormOperatorOrder = []string{
 	"=", "!=", "LIKE", ">", "<", ">=", "<=", "IS NULL", "IS NOT NULL", "IN",
 }

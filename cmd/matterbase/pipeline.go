@@ -1,7 +1,6 @@
 // The record pipeline: cache replay → DuckDB SQL → full-text display
-// filter. Port of matterbase's pipeline.py. DuckDB runs as a CLI
-// subprocess (decision 1: no CGO, the yank command and the UI share the
-// same codepath).
+// filter. DuckDB runs as a CLI subprocess: no CGO, and the yank command
+// and the UI share the same codepath.
 package main
 
 import (
@@ -65,8 +64,7 @@ func firstLine(s string) string {
 	return s
 }
 
-// queryCachedRecordsFn is swappable in tests (Python's
-// patch("matterbase.pipeline.query_cached_records")).
+// queryCachedRecordsFn is swappable in tests, which run without grubber.
 var queryCachedRecordsFn = queryCachedRecords
 
 // runPipeline runs the full chain over the in-session cache: grubber
