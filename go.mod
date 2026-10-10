@@ -1,6 +1,6 @@
 module github.com/rhsev/matterbase
 
-go 1.26.5
+go 1.27
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
