@@ -132,8 +132,7 @@ func (q *QueryState) BuildCommand(notesDir string, opts BuildCommandOpts) string
 		cmd = "GRUBBER_ARRAY_FIELDS=" + strings.Join(opts.ArrayFields, ",") + " " + cmd
 	}
 	if sql := q.EffectiveSQL(); sql != "" {
-		escaped := strings.ReplaceAll(sql, `"`, `\"`)
-		cmd += fmt.Sprintf(` | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE %s"`, escaped)
+		cmd += fmt.Sprintf(` | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE %s"`, dquoteEscape(sql))
 	}
 	return cmd
 }
@@ -151,6 +150,11 @@ func shellQuote(s string) string {
 }
 
 var shellSafeRe = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
+
+// dquoteEscape escapes s for use inside a double-quoted shell word. The
+// SQL goes in double quotes because it usually holds single-quoted
+// literals; $, backtick and backslash would otherwise be expanded.
+var dquoteEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`, "`", "\\`").Replace
 
 // ---------------------------------------------------------------------------
 // SQL form: field → operator → value ⇒ clause. Comfort only — it

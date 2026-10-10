@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -81,6 +82,22 @@ func TestBuildCommand(t *testing.T) {
 			if !strings.Contains(cmd, want) {
 				t.Errorf("got %q, want it to contain %q", cmd, want)
 			}
+		}
+	})
+
+	t.Run("sql survives the shell unchanged", func(t *testing.T) {
+		where := `note LIKE '%$HOME%' AND x = "a\\b" AND y = '` + "`id`" + `'`
+		s := QueryState{SQLWhere: where}
+		cmd := s.BuildCommand("/notes", BuildCommandOpts{})
+		const stage = "| duckdb -json -c "
+		arg := cmd[strings.Index(cmd, stage)+len(stage):]
+		out, err := exec.Command("sh", "-c", "printf '%s' "+arg).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "SELECT * FROM read_json_auto('/dev/stdin') WHERE " + where
+		if string(out) != want {
+			t.Errorf("shell gives\n%s\nwant\n%s", out, want)
 		}
 	})
 

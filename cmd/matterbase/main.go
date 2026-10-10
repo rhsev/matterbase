@@ -541,13 +541,18 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "y":
-		bkexec.Copy(m.buildCommand())
-		m.status, m.statusErr = "Copied: "+m.buildCommand(), false
+	case "y", "Y":
+		command := m.buildCommand()
+		if err := bkexec.Copy(command); err != nil {
+			// Y stays open too: quitting would lose the command.
+			m.status, m.statusErr = "clipboard: "+err.Error(), true
+			return m, nil
+		}
+		if msg.String() == "Y" {
+			return m, tea.Quit
+		}
+		m.status, m.statusErr = "Copied: "+command, false
 		return m, nil
-	case "Y":
-		bkexec.Copy(m.buildCommand())
-		return m, tea.Quit
 	case "m":
 		m.previewMode = nextMode(m.previewMode)
 		m.updatePreview()
