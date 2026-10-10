@@ -52,6 +52,7 @@ type appModel struct {
 	notesDir      string
 	editor        string
 	configPath    string
+	overrides     cliOverrides
 	searchMode    string
 	grubberSet    string
 	mmd           bool
@@ -159,6 +160,23 @@ func (m *appModel) applyConfig(cfg *Config) {
 		CodeHighlight: cfg.ApexCodeHighlight, CodeHighlightTheme: cfg.ApexCodeHighlightTheme,
 	}
 	m.collectionDir = findCollectionDir(m.notesDir)
+}
+
+// cliOverrides are the command-line settings that win over the config:
+// the PATH argument and --depth. They are applied at startup and again on
+// every reload (R), which rereads the config file.
+type cliOverrides struct {
+	notesDir string
+	depth    *int
+}
+
+func (o cliOverrides) apply(cfg *Config) {
+	if o.notesDir != "" {
+		cfg.NotesDir = o.notesDir
+	}
+	if o.depth != nil {
+		cfg.Depth = o.depth
+	}
 }
 
 func leadValue(rec Record) string {
@@ -615,6 +633,7 @@ func (m appModel) reloadConfig() (tea.Model, tea.Cmd) {
 		m.status, m.statusErr = "config: "+errMsg, true
 		return m, nil
 	}
+	m.overrides.apply(cfg)
 	m.applyConfig(cfg)
 
 	active := map[string]bool{}
@@ -884,6 +903,7 @@ func main() {
 	}
 
 	cfg := loadConfig(*configPath)
+	var overrides cliOverrides
 	if fs.NArg() > 0 {
 		p, err := filepath.Abs(fs.Arg(0))
 		if err != nil {
@@ -895,13 +915,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Error: not a directory:", p)
 			os.Exit(1)
 		}
-		cfg.NotesDir = p
+		overrides.notesDir = p
 	}
 	if *depth >= 0 {
-		cfg.Depth = depth
+		overrides.depth = depth
 	}
+	overrides.apply(cfg)
 
 	m := newAppModel(cfg)
+	m.overrides = overrides
 	defer func() {
 		if m.cachePath != "" {
 			os.Remove(m.cachePath)

@@ -90,3 +90,30 @@ func TestPresetsFromConfig(t *testing.T) {
 		}
 	})
 }
+
+// The PATH argument and --depth win over the config, also after R
+// rereads the file.
+func TestReloadKeepsCommandLineOverrides(t *testing.T) {
+	configDir, cliDir := t.TempDir(), t.TempDir()
+	path := writeConfig(t, "notes_dir: "+configDir+"\ndepth: 5\n")
+	cfg, errMsg := readConfig(path)
+	if errMsg != "" {
+		t.Fatalf("errMsg = %q", errMsg)
+	}
+	depth := 1
+	overrides := cliOverrides{notesDir: cliDir, depth: &depth}
+	overrides.apply(cfg)
+	m := newAppModel(cfg)
+	m.overrides = overrides
+	defer os.Remove(m.cachePath)
+
+	next, _ := m.reloadConfig()
+	m = next.(appModel)
+
+	if m.notesDir != cliDir {
+		t.Errorf("notesDir = %q, want the command-line %q", m.notesDir, cliDir)
+	}
+	if m.depth == nil || *m.depth != 1 {
+		t.Errorf("depth = %v, want 1", m.depth)
+	}
+}
