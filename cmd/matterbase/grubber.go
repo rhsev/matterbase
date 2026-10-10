@@ -16,9 +16,10 @@ import (
 	bkexec "github.com/rhsev/matterbase/basekit/exec"
 )
 
-// minGrubberVersion is the release with --merge-on (annotation +
-// collection-index records collapse inside grubber).
-var minGrubberVersion = [3]int{0, 12, 0}
+// minGrubberVersion: --explode (0.14) for the collection index, a stable
+// record order (0.16), and filter values and merge keys compared in NFC
+// (0.19), so a binder typed in NFC matches one stored in NFD.
+var minGrubberVersion = [3]int{0, 19, 0}
 
 // The (id, binder) identity of fileregister collection records, and the
 // array field exploded into per-membership rows before the merge.
@@ -83,12 +84,8 @@ func checkGrubberVersion() (bool, string) {
 
 // runGrubberCmd runs a grubber command and returns the parsed JSON
 // records. onError, if set, is called when the output can't be parsed.
-func runGrubberCmd(args []string, arrayFields []string, onError func(string)) []Record {
-	env := os.Environ()
-	if len(arrayFields) > 0 {
-		env = append(env, "GRUBBER_ARRAY_FIELDS="+strings.Join(arrayFields, ","))
-	}
-	out, err := bkexec.Run(context.Background(), 15*time.Second, env, args[0], args[1:]...)
+func runGrubberCmd(args []string, onError func(string)) []Record {
+	out, err := bkexec.Run(context.Background(), 15*time.Second, nil, args[0], args[1:]...)
 	if err != nil {
 		if onError != nil {
 			onError(err.Error())
@@ -175,10 +172,15 @@ func extractToJSONL(notesDir, outPath string, opts ExtractOpts, onError func(str
 // (record-level AND), exactly what the yankable command reproduces.
 func queryCachedRecords(cachePath string, expressions []string, arrayFields []string, onError func(string)) []Record {
 	args := []string{grubberBin(), "extract", "--from-jsonl", cachePath}
+	// A flag, not GRUBBER_ARRAY_FIELDS: the command line outranks every
+	// grubber config source, the environment does not.
+	if len(arrayFields) > 0 {
+		args = append(args, "--array-fields", strings.Join(arrayFields, ","))
+	}
 	for _, expr := range expressions {
 		args = append(args, "-f", expr)
 	}
-	records := runGrubberCmd(args, arrayFields, onError)
+	records := runGrubberCmd(args, onError)
 	if records == nil {
 		return []Record{}
 	}

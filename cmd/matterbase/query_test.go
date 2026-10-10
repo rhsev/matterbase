@@ -131,13 +131,13 @@ func TestBuildCommand(t *testing.T) {
 		cmd := (&QueryState{}).BuildCommand("/notes", BuildCommandOpts{
 			SearchMode: "frontmatter", MMD: true, Depth: &depth, ArrayFields: []string{"tags"},
 		})
-		for _, want := range []string{"--frontmatter-only", "--mmd", "--depth 2"} {
+		for _, want := range []string{"--frontmatter-only", "--mmd", "--depth 2", "--array-fields tags"} {
 			if !strings.Contains(cmd, want) {
 				t.Errorf("got %q, want it to contain %q", cmd, want)
 			}
 		}
-		if !strings.HasPrefix(cmd, "GRUBBER_ARRAY_FIELDS=tags ") {
-			t.Errorf("got %q", cmd)
+		if strings.Contains(cmd, "GRUBBER_ARRAY_FIELDS") {
+			t.Errorf("got %q, array fields belong in a flag", cmd)
 		}
 	})
 

@@ -119,6 +119,9 @@ func (q *QueryState) BuildCommand(notesDir string, opts BuildCommandOpts) string
 	if opts.MMD {
 		parts = append(parts, "--mmd")
 	}
+	if len(opts.ArrayFields) > 0 {
+		parts = append(parts, "--array-fields", shellQuote(strings.Join(opts.ArrayFields, ",")))
+	}
 	if opts.CollectionDir != "" && opts.GrubberSet == "" {
 		parts = append(parts, "--from-jsonl", shellQuote(opts.CollectionDir))
 		parts = append(parts, "--explode", collectionExplodeField)
@@ -128,9 +131,6 @@ func (q *QueryState) BuildCommand(notesDir string, opts BuildCommandOpts) string
 		parts = append(parts, "-f", shellQuote(expr))
 	}
 	cmd := strings.Join(parts, " ")
-	if len(opts.ArrayFields) > 0 {
-		cmd = "GRUBBER_ARRAY_FIELDS=" + strings.Join(opts.ArrayFields, ",") + " " + cmd
-	}
 	if sql := q.EffectiveSQL(); sql != "" {
 		cmd += fmt.Sprintf(` | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE %s"`, dquoteEscape(sql))
 	}
