@@ -49,12 +49,11 @@ filtering, [apex](https://github.com/ttscoff/apex) for preview rendering,
 
 ## Requirements
 
-- [grubber](https://github.com/rhsev/grubber) **≥ 0.12.0** — install it and
-  make sure it's on `PATH` (override the location with `$GRUBBER`). matterbase
+- [grubber](https://github.com/rhsev/grubber) **≥ 0.19.0**. Install it and
+  make sure it is on `PATH`, or set `$GRUBBER` to its location. matterbase
   checks the version at startup. It scans the notes dir once per refresh into
-  a JSONL cache and re-filters by replaying it through `grubber --from-jsonl`;
-  0.12.0 is the release with `--merge-on` (collection index + annotation
-  dedup). `grubber_set` needs ≥ 0.13.0 (`from_jsonl` in config sets).
+  a JSONL cache and filters by replaying the cache through
+  `grubber --from-jsonl`.
 - [duckdb](https://duckdb.org) CLI — for the SQL WHERE channel. The UI runs
   the same `duckdb` command the yank produces; without it, presets, filename
   and full-text still work.
@@ -199,24 +198,34 @@ exactly what the top bar shows:
 grubber extract ~/Notes -a --from-jsonl ~/Notes/collections/ --explode binder --merge-on id,binder -f status=active | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE amount > 1000"
 ```
 
-`Y` does the same and quits, printing the command to stdout.
+`Y` copies the command and quits.
 
 With `grubber_set: NAME` in the config, the yank shrinks to
-`grubber extract --set NAME …` — the database definition (path, JSONL sources,
-merge keys) lives in grubber's config set. Short, but only portable to
-machines whose grubber config defines that set; keeping the set in sync with
-`notes_dir` is your job.
+`grubber extract --set NAME …`. The set in grubber's config then holds the
+database definition. For a fileregister collection it needs `path`,
+`from_jsonl`, `explode: binder` and `merge_on: [id, binder]`. Without
+`explode`, the yank returns one record per file with `binder` as an array,
+while the table shows one record per binder. The short form only runs on
+machines whose grubber config defines the set. matterbase does not check that
+the set matches `notes_dir`.
+
+matterbase calls grubber without `--no-config`, so your
+`~/.config/grubber/config.yaml` and the `GRUBBER_*` variables apply to the
+table and to the yanked command alike. The search mode, `depth` and
+`array_fields` from the matterbase config go to grubber as flags and take
+precedence over grubber's config.
 
 Clipboard support is cross-platform: `pbcopy` on macOS, `wl-copy` on Wayland,
 `xclip` or `xsel` on X11.
 
-## Collections (not yet public)
+## Collections
 
 If you use [fileregister](https://github.com/rhsev/fileregister) to organize files
 into binders, its central collection index (`<notes_dir>/collections/*.jsonl`)
 is detected automatically: index records are unioned into the scan and an
-annotated record appears **once** — under its markdown annotation, back-filled
-with the index fields (`--merge-on id,binder`). Un-annotated inbox records
+annotated record appears **once**. `--explode binder` splits each index
+record into one row per binder, and `--merge-on id,binder` collapses it with
+its markdown annotation, back-filled with the index fields. Un-annotated inbox records
 appear under their jsonl source with the field-form preview.
 
 matterbase is the rich query/browse side; the collection lifecycle (add,

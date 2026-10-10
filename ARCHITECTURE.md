@@ -55,8 +55,10 @@ Plain text remains the source of truth.
 
 When a fileregister collection index is present, the same logical record exists
 in two layers: an index line (capture) and, once promoted, a markdown
-annotation (curation). grubber's `--merge-on id,binder` collapses the two at
-extraction time — the annotation wins, index-only fields are back-filled. The
+annotation (curation). The index keeps one line per file with `binder` as an
+array. grubber's `--explode binder` splits it into one row per binder, and
+`--merge-on id,binder` then collapses each row with its annotation at
+extraction time. The annotation wins, index-only fields are back-filled. The
 merge lives in grubber, not in matterbase, so the yanked command reproduces
 exactly what the table shows.
 
@@ -70,7 +72,8 @@ exactly what the table shows.
 Responsibilities:
 
 - Scan directory tree, extract frontmatter and YAML blocks
-- Read and union JSONL sources (`--from-jsonl`), merge layers (`--merge-on`)
+- Read and union JSONL sources (`--from-jsonl`), split array fields into rows
+  (`--explode`), merge layers (`--merge-on`)
 - Apply `-f` filter expressions at record level
 - Emit JSON or JSONL
 
@@ -78,6 +81,12 @@ Responsibilities:
 index, stateless execution. Instead of maintaining incremental indexes,
 grubber performs a full scan per invocation — native performance keeps the
 scan cost below indexing complexity.
+
+matterbase calls grubber without `--no-config`, unlike fileregister. The yanked
+command runs in the user's shell, where grubber reads `config.yaml` and the
+`GRUBBER_*` variables. If matterbase ignored them, table and yank would show
+different records. What matterbase sets itself (search mode, depth, array
+fields) goes to grubber as flags, which outrank every config source.
 
 ### In-session JSONL cache
 
