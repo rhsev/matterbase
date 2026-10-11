@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -91,6 +92,11 @@ func runGrubberCmd(args []string, onError func(string)) []Record {
 			onError(err.Error())
 		}
 		return nil
+	}
+	// No match is no output: grubber prints "No records found" to stderr
+	// and exits 0.
+	if len(bytes.TrimSpace(out)) == 0 {
+		return []Record{}
 	}
 	var records []Record
 	if err := json.Unmarshal(out, &records); err != nil {

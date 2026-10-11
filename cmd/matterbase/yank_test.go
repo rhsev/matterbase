@@ -145,6 +145,11 @@ func TestYankReturnsTheTableRecords(t *testing.T) {
 			m.arrayFields = []string{"tags"}
 			m.state.SQLWhere = "tags IS NOT NULL"
 		}, 2},
+		{"no match", func(m *appModel) {
+			m.state.Presets[0].Exprs = []string{"type=nothing"}
+			m.state.Presets[0].Active = true
+		}, 0},
+		{"no match in sql", func(m *appModel) { m.state.SQLWhere = "amount > 100000" }, 0},
 		{"blocks only", func(m *appModel) { m.searchMode = "blocks_only" }, 6},
 		{"depth 0", func(m *appModel) {
 			d := 0
