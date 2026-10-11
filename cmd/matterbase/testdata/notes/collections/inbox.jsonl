@@ -1,0 +1,3 @@
+{"type":"ref","id":"f1","binder":["receipts","project-a"],"filename":"invoice.pdf","kind":"pdf"}
+{"type":"ref","id":"f2","binder":["receipts"],"filename":"büro.pdf","kind":"pdf"}
+{"type":"ref","id":"f3","binder":[],"filename":"loose.txt","kind":"txt"}
