@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -25,7 +26,20 @@ import (
 	"github.com/rhsev/matterbase/basekit/togglelist"
 )
 
-const version = "0.7.1"
+// version is stamped at build time from the tag: the Makefile passes
+// -ldflags "-X main.version=$(git describe --tags --dirty)". `go install
+// …@v0.8.0` passes no flags, so init falls back to the module version Go
+// records in the binary; only a build without either says "dev".
+var version = "dev"
+
+func init() {
+	if version != "dev" {
+		return
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		version = strings.TrimPrefix(bi.Main.Version, "v")
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Model

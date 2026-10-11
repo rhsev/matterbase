@@ -6,6 +6,7 @@ AUFTRAG-*.md
 go.work
 go.work.sum
 /matterbase
+/matterbase-*
 PARITY.md
 
 # python leftovers never return
