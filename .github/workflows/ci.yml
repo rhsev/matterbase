@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 1.27 is the declared minimum, "stable" the toolchain the release
+        # binaries are built with.
+        go: ["1.27", "stable"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+      # grubber and duckdb run in the tests that compare the yanked command
+      # with the table. Without them those tests are skipped.
+      - name: Install grubber
+        run: |
+          go install github.com/rhsev/grubber@v0.19.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Install duckdb
+        run: |
+          curl -fsSL -o duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-amd64.zip
+          sudo unzip -o duckdb.zip -d /usr/local/bin
+          rm duckdb.zip
+      - run: grubber --version && duckdb --version
+      - run: go test -race ./...
