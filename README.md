@@ -1,5 +1,7 @@
 # matterbase
 
+[![CI](https://github.com/rhsev/matterbase/actions/workflows/ci.yml/badge.svg)](https://github.com/rhsev/matterbase/actions/workflows/ci.yml)
+
 A database-like table view on frontmatter and YAML records in Markdown notes. Build a query command for the shell (field filters and SQL). For macOS and Linux. grubber and matterbase are designed to keep data and context together.
 
 ## Why?
