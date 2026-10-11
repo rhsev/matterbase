@@ -1,13 +1,11 @@
 # matterbase – Technical Architecture
 
-*Why all this? Just to keep data and context together.*
-
 ## Overview
 
 matterbase is a keyboard-driven terminal UI for constructing queries over
-structured records embedded in plain-text files.
+structured records in plain-text files.
 
-The system is intentionally built as a layered, stateless architecture:
+It is built as a stack of stateless layers:
 
 ```
 record sources (markdown / typst / jsonl)
@@ -23,51 +21,50 @@ record sources (markdown / typst / jsonl)
   matterbase TUI: table, adaptive preview, reconstructed CLI command
 ```
 
-matterbase does not maintain an index or database. Every view is derived
-directly from the current filesystem state.
+matterbase keeps no index and no database. Every view is derived from the
+current state of the files.
 
 ## Data Model
 
 ### Record Semantics
 
-The atomic unit is the **record**. Every source is a multi-record file:
+The atomic unit is the **record**. Every source can hold several records.
 
-- **markdown / typst** — each YAML block produces a record combined with the
-  frontmatter; a frontmatter-only file produces one record.
-- **jsonl** — each line is a record. (fileregister's central collection index
-  lives here: `<notes_dir>/collections/*.jsonl`.)
+- **markdown / typst**: each YAML block produces a record combined with the
+  frontmatter. A file with frontmatter only produces one record.
+- **jsonl**: each line is a record. fileregister's central collection index
+  lives here (`<notes_dir>/collections/*.jsonl`).
 
-A source merely *contains* records; it is not a hierarchy. The file a record
-came from is a **field on the record** (`_note_file`), not a navigation level.
-This is why matterbase has no file list: jsonl is just a source type whose
-records sit in the table like any other, with the source as a column.
+A source *contains* records and forms no hierarchy. The file a record came
+from is a **field on the record** (`_note_file`), not a navigation level.
+matterbase therefore has no file list. JSONL is a source type like any other,
+and its records sit in the same table with the source as a column.
 
 ### Schema-on-Read
 
-No fixed schema is enforced when writing notes. Structure is inferred at query
-time from whatever fields are present. Heterogeneous sources — different field
-sets across notes — are queried together in a single table; missing fields
-simply produce empty columns, no record is rejected.
+Notes follow no fixed schema. The structure is inferred at query time from the
+fields present. Notes with different field sets are queried together in one
+table. A missing field is an empty column, and no record is rejected.
 
-Plain text remains the source of truth.
+The text files stay the only copy of the data.
 
 ### Collection merging
 
-When a fileregister collection index is present, the same logical record exists
-in two layers: an index line (capture) and, once promoted, a markdown
+When a fileregister collection index is present, the same logical record
+exists in two layers, an index line (capture) and, once promoted, a Markdown
 annotation (curation). The index keeps one line per file with `binder` as an
 array. grubber's `--explode binder` splits it into one row per binder, and
-`--merge-on id,binder` then collapses each row with its annotation at
-extraction time. The annotation wins, index-only fields are back-filled. The
-merge lives in grubber, not in matterbase, so the yanked command reproduces
-exactly what the table shows.
+`--merge-on id,binder` then merges each row with its annotation at
+extraction time. The annotation's fields win, and fields only the index has
+are filled in. The merge happens in grubber, so the yanked command returns the
+same records as the table.
 
 ## System Layers
 
 ### grubber (Extraction Engine)
 
 **Language:** Go
-**Role:** Fast extraction, record-level filtering, source merging
+**Role:** Extraction, record-level filtering, source merging
 
 Responsibilities:
 
@@ -77,10 +74,9 @@ Responsibilities:
 - Apply `-f` filter expressions at record level
 - Emit JSON or JSONL
 
-~10,000 files in well under one second (Go, multi-threaded); no persistent
-index, stateless execution. Instead of maintaining incremental indexes,
-grubber performs a full scan per invocation — native performance keeps the
-scan cost below indexing complexity.
+grubber scans about 10,000 files in well under one second (Go, multi-threaded).
+It keeps no persistent index and scans everything on each call. On a local SSD
+that costs less than maintaining an incremental index would.
 
 matterbase calls grubber without `--no-config`, unlike fileregister. The yanked
 command runs in the user's shell, where grubber reads `config.yaml` and the
@@ -91,11 +87,11 @@ fields) goes to grubber as flags, which outrank every config source.
 ### In-session JSONL cache
 
 matterbase scans the notes dir **once per refresh** into a temporary JSONL
-file and re-filters by replaying it through `grubber --from-jsonl <cache>`.
-grubber stays the single filter authority (its `-f` operators are not
-reimplemented in matterbase); the cache is rebuilt on every refresh (`r`), so
-freshness equals a normal re-scan and there is no cross-session staleness.
-Preset changes replay the cache instead of re-reading the filesystem.
+file and filters by replaying it through `grubber --from-jsonl <cache>`.
+grubber stays the only place where `-f` filters are evaluated, and matterbase
+does not reimplement its operators. The cache is rebuilt on every refresh
+(`r`), so it is as fresh as a new scan, and nothing carries over between
+sessions. Preset changes replay the cache instead of reading the files again.
 
 ### matterbase (Terminal UI)
 
@@ -104,7 +100,7 @@ Preset changes replay the cache instead of re-reading the filesystem.
 the shared **basekit** foundation in this repo
 **Role:** Query construction and interactive exploration
 
-Module structure — the logic lives in TUI-free files, the app model is wiring:
+The logic lives in files without TUI code. The app model connects them.
 
 | File                  | Responsibility                                                        |
 |-----------------------|------------------------------------------------------------------------|
@@ -116,18 +112,18 @@ Module structure — the logic lives in TUI-free files, the app model is wiring:
 | `config.go`           | YAML config loading and in-session reload                             |
 | `main.go`             | The Bubble Tea model: layout, key handling, pipeline plumbing, CLI    |
 
-All state is ephemeral and derived from the current filesystem, the built
-query, and the config. The built query has three channels:
+All state is held in memory and derived from the files, the built query and
+the config. The built query has three channels.
 
-1. **Presets** — grubber `-f` expressions; multiple active presets flatten
-   into one grubber call (record-level AND), identical in display and yank.
-2. **SQL WHERE** — DuckDB over the extracted records. The filename search is
-   folded in as SQL (`_note_file LIKE …`); a small form generates clauses
-   into the SQL input, which stays the single source of truth.
-3. **Full-text** — a *display filter* with special status: it searches
-   prose/YAML-block text of markdown/typst sources, which `grubber | duckdb`
-   cannot express. It never enters the yanked command; jsonl records drop out
-   while it is active.
+1. **Presets** are grubber `-f` expressions. Several active presets go into
+   one grubber call (record-level AND), the same in display and yank.
+2. **SQL WHERE** is DuckDB over the extracted records. The filename search
+   is added as SQL (`_note_file LIKE …`). A small form writes clauses into the
+   SQL input, and the SQL input is what the query uses.
+3. **Full-text** is a *display filter*. It searches the prose and YAML block
+   text of Markdown and typst sources, which `grubber | duckdb` cannot do. It
+   never enters the yanked command, and JSONL records drop out while it is
+   active.
 
 ### basekit (TUI Foundation)
 
@@ -144,37 +140,39 @@ The widgets and rules shared by the family's TUIs live in `basekit/`:
 | `theme`       | The Nord-based palette, defined once                               |
 | `exec`        | Editor/subprocess/clipboard helpers                                |
 
-Two rules from hard experience are enforced here rather than per app. The
-**frame budget**: a frame is exactly the terminal height and never wider —
-one line over makes the terminal scroll and desyncs the diff renderer, so
-every pane's content is clamped in both dimensions. And **content
-sanitizing**: real notes contain characters that terminals and ANSI width
-math disagree on (soft hyphens from web clippings, zero-width marks); they
-are stripped before any content reaches a frame.
+basekit enforces two rules for every app. The first is the **frame budget**.
+A frame is exactly as high as the terminal and never wider. One line too many
+scrolls the terminal and confuses Bubble Tea's renderer, so the content of
+every pane is clamped in both dimensions. The second is **content
+sanitizing**. Real notes contain characters whose width terminals and the
+ANSI width calculation count differently, such as soft hyphens from web
+clippings and zero-width marks. They are removed before any content reaches a
+frame.
 
-Since bubbles/table has no horizontal scrolling, the table shows what fits:
-an explicit `table_columns` wins, otherwise columns are ranked by fill rate
-and capped to the width. The column picker (`c`) adjusts the selection per
-session; the `record` preview mode always shows the full record.
+bubbles/table cannot scroll horizontally, so the table shows what fits.
+`table_columns` decides when it is set. Otherwise columns are ranked by fill
+rate and cut off at the terminal width. The column picker (`c`) changes the
+selection for the session, and the `record` preview mode always shows the
+full record.
 
 ### DuckDB (Query Layer)
 
-After grubber reduces the record set, the SQL WHERE clause is applied via the
-DuckDB CLI — a subprocess, not an embedded library:
+After grubber has reduced the record set, the DuckDB CLI applies the SQL WHERE
+clause. It runs as a subprocess, not as an embedded library.
 
-```sql
+```sh
 duckdb -json -c "SELECT * FROM read_json_auto('records.json') WHERE <clause>"
 ```
 
-This is classical two-phase query planning: cheap structural filter first
-(grubber), expressive record-level query second (DuckDB). Using the CLI keeps
-the binary pure Go and means the UI and the yanked command share one
-codepath — what the table shows is literally the command you copy.
+grubber applies the structural filters first, and DuckDB then evaluates the
+SQL on the smaller set. Running the CLI keeps the binary pure Go. The UI and
+the yanked command run the same `duckdb` call, so the table shows what the
+copied command returns.
 
 ## Preview Architecture
 
-One **global mode** — set once with `m`, applied to whichever record is
-selected, according to its source type:
+One **global mode**, set with `m`, applies to whichever record is selected,
+according to its source type.
 
 | Mode      | markdown                            | typst        | jsonl       |
 |-----------|-------------------------------------|--------------|-------------|
@@ -182,54 +180,55 @@ selected, according to its source type:
 | `compact` | frontmatter + the record's YAML block with its markdown section | section extraction, else field form | field form |
 | `record`  | field form                          | field form   | field form  |
 
-The renderer chain degrades gracefully: apex → bat → raw text with dimmed
-frontmatter. External renderers are interchangeable.
+If a renderer is missing or fails, the next one takes over, in the order apex,
+bat, raw text with dimmed frontmatter. Each renderer can be replaced.
 
 ## Architectural Principles
 
-**Statelessness.** No database, no index file, no background daemon. Every
-invocation reflects the current file state.
+**Statelessness.** There is no database, no index file and no background
+daemon. Every call reflects the current state of the files.
 
-**Unix Composition.** Each component has one job: grubber extracts and
-filters, DuckDB queries, matterbase interacts. Each is usable independently.
+**Unix Composition.** Each component has one job. grubber extracts and
+filters, DuckDB queries, matterbase handles the interaction. Each can be used
+on its own.
 
-**Transparency.** The top bar always shows the shell command the current view
-corresponds to; `y` copies it:
+**Transparency.** The top bar always shows the shell command behind the
+current view, and `y` copies it:
 
 ```
 grubber extract ~/notes -a --from-jsonl ~/notes/collections/ --explode binder --merge-on id,binder -f status=active | duckdb -json -c "SELECT * FROM read_json_auto('/dev/stdin') WHERE amount > 1000"
 ```
 
-The UI is a convenience layer, not a proprietary execution environment. With
-a grubber config set, the same command shrinks to
-`grubber extract --set notes …` — the database definition moves into config.
+The copied command runs without matterbase. With a grubber config set it
+shrinks to `grubber extract --set notes …`, and the database definition moves
+into grubber's config.
 
-The one deliberate exception to yank-fidelity is full-text: it narrows the
-display only, because no shell pipeline can reproduce it.
+Full-text is the one deliberate exception to this. It narrows the display only,
+because no shell pipeline can reproduce it.
 
 **Non-blocking UI.** grubber and DuckDB run in goroutines behind Bubble Tea
-commands; a generation counter drops stale results when a newer query has
-started (the moral equivalent of an exclusive worker).
+commands. A generation counter drops results that arrive after a newer query
+has started.
 
 ## Known Trade-offs
 
-**Full scan on every refresh.** No incremental indexing. Native Go performance
-makes full scans inexpensive on local SSD; beyond ~10k files on slow storage,
-indexing may become necessary.
+**Full scan on every refresh.** There is no incremental index. Full scans are
+cheap on a local SSD. Beyond about 10,000 files on slow storage, an index may
+become necessary.
 
-**YAML-only structured data.** No schema validation, no relational joins
-across notes. Complex relational modeling is intentionally out of scope.
+**YAML-only structured data.** There is no schema validation and no join
+across notes. Complex relational modelling is out of scope.
 
-**SSD assumption.** On network filesystems, scan times grow and the in-session
-cache replay becomes the more important optimisation.
+**SSD assumption.** On network file systems, scans take longer and the
+in-session cache matters more.
 
-**DuckDB as external CLI.** The SQL channel needs `duckdb` on PATH. In
-exchange the binary stays pure Go, and UI and yank cannot drift apart.
+**DuckDB as external CLI.** The SQL WHERE clause and the filename search need
+`duckdb` on `PATH`. The binary stays pure Go in return, and UI and yank always
+run the same SQL.
 
 ## Is matterbase a Database?
 
-No. It does not store data, maintain an index, implement transactions, or
-define its own query language. The filesystem is the storage layer; plain
-text is the canonical format. Conceptually it is closer to `ripgrep + jq +
-fzf` than to SQLite — a stateless, database-like query layer for structured
-records in text files.
+No. It stores no data, keeps no index, has no transactions and defines no
+query language of its own. The file system is the storage layer and plain
+text the format. matterbase is a stateless query layer for structured records
+in text files.
