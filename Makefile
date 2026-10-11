@@ -28,7 +28,7 @@ uninstall:
 	rm -f $(PREFIX)/bin/$(BIN)
 
 test:
-	go test ./...
+	go test -race ./...
 
 clean:
 	rm -f $(BIN)

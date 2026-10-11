@@ -516,6 +516,10 @@ func (m *appModel) setFocus(zone focusZone) tea.Cmd {
 	return nil
 }
 
+// copyToClipboard is swappable in tests, which must not touch the real
+// clipboard.
+var copyToClipboard = bkexec.Copy
+
 func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -538,7 +542,7 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "y", "Y":
 		command := m.buildCommand()
-		if err := bkexec.Copy(command); err != nil {
+		if err := copyToClipboard(command); err != nil {
 			// Y stays open too: quitting would lose the command.
 			m.status, m.statusErr = "clipboard: "+err.Error(), true
 			return m, nil

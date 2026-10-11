@@ -53,9 +53,14 @@ func drive(t *testing.T, m appModel, msg tea.Msg) (appModel, int) {
 // without the grubber binary.
 func newFlowModel(t *testing.T) appModel {
 	t.Helper()
+	return newFlowModelWith(t, &Config{NotesDir: t.TempDir()})
+}
+
+func newFlowModelWith(t *testing.T, cfg *Config) appModel {
+	t.Helper()
 	orig := queryCachedRecordsFn
 	queryCachedRecordsFn = func(string, []string, []string, func(string)) []Record { return nil }
-	m := newAppModel(&Config{NotesDir: t.TempDir()})
+	m := newAppModel(cfg)
 	t.Cleanup(func() {
 		queryCachedRecordsFn = orig
 		os.Remove(m.cachePath)

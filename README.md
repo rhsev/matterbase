@@ -1,6 +1,6 @@
 # matterbase
 
-A database-like table view on frontmatter and YAML records in Markdown notes. Build a query command for the shell (field filters and SQL). For macOS and Linux.
+A database-like table view on frontmatter and YAML records in Markdown notes. Build a query command for the shell (field filters and SQL). For macOS and Linux. grubber and matterbase are designed to keep data and context together.
 
 ## Why?
 
@@ -248,4 +248,4 @@ MIT
 
 ---
 
-*Part of a family of plain-text tools — the [profile page](https://github.com/rhsev) has the map.*
+*Part of a family of plain-text tools. The [profile page](https://github.com/rhsev) provides an overview.*
