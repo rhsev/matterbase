@@ -177,8 +177,36 @@ var sqlFormOperators = func() map[string]bool {
 
 var simpleIdentRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// sqlKeywords are the DuckDB keywords (as of 1.5) that cannot stand as a
+// bare column name: they fail to parse, or, like true, false and null,
+// parse as a value.
+var sqlKeywords = func() map[string]bool {
+	m := map[string]bool{}
+	for _, k := range []string{
+		"all", "analyse", "analyze", "and", "anti", "any", "array", "as",
+		"asc", "asof", "asymmetric", "at", "authorization", "binary", "both",
+		"by", "case", "cast", "check", "collate", "collation", "column",
+		"concurrently", "constraint", "create", "cross", "default",
+		"deferrable", "desc", "describe", "distinct", "do", "else", "end",
+		"except", "false", "fetch", "for", "foreign", "freeze", "from", "full",
+		"glob", "group", "having", "ilike", "in", "initially", "inner",
+		"intersect", "into", "is", "isnull", "join", "lambda", "lateral",
+		"leading", "left", "like", "limit", "natural", "not", "notnull",
+		"null", "offset", "on", "only", "or", "order", "outer", "overlaps",
+		"pivot", "pivot_longer", "pivot_wider", "placing", "positional",
+		"primary", "qualify", "references", "returning", "right", "select",
+		"semi", "show", "similar", "some", "summarize", "symmetric", "table",
+		"tablesample", "then", "to", "trailing", "true", "union", "unique",
+		"unpack", "unpivot", "using", "variadic", "verbose", "when", "where",
+		"window", "with",
+	} {
+		m[k] = true
+	}
+	return m
+}()
+
 func sqlIdent(field string) string {
-	if simpleIdentRe.MatchString(field) {
+	if simpleIdentRe.MatchString(field) && !sqlKeywords[strings.ToLower(field)] {
 		return field
 	}
 	return `"` + strings.ReplaceAll(field, `"`, `""`) + `"`

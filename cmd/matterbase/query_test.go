@@ -260,6 +260,9 @@ func TestBuildClause(t *testing.T) {
 		{"binder", "IN", "a, b, 3", "binder IN ('a', 'b', 3)"},
 		{"name", "=", "o'brien", "name = 'o''brien'"},
 		{"my field", "=", "x", `"my field" = 'x'`},
+		{"end", "IS NULL", "", `"end" IS NULL`},
+		{"Order", "=", "1", `"Order" = 1`},
+		{"null", "=", "x", `"null" = 'x'`},
 		{"", "=", "x", ""},
 		{"status", "=", "", ""},
 		{"status", "bogus", "x", ""},
@@ -268,6 +271,25 @@ func TestBuildClause(t *testing.T) {
 	for _, c := range cases {
 		if got := buildClause(c.field, c.op, c.value); got != c.want {
 			t.Errorf("buildClause(%q,%q,%q) = %q, want %q", c.field, c.op, c.value, got, c.want)
+		}
+	}
+}
+
+// Every field name the form quotes or leaves bare must parse in the
+// installed DuckDB and select the record. Skipped without duckdb.
+func TestBuildClauseRunsInDuckDB(t *testing.T) {
+	if _, err := exec.LookPath("duckdb"); err != nil {
+		t.Skip("duckdb not on PATH")
+	}
+	fields := []string{"status", "type", "my field"}
+	for k := range sqlKeywords {
+		fields = append(fields, k)
+	}
+	for _, f := range fields {
+		rec := []Record{{f: "x"}}
+		got, errMsg := applySQL(rec, buildClause(f, "=", "x"))
+		if errMsg != "" || len(got) != 1 {
+			t.Errorf("field %q: %d records, error %q", f, len(got), errMsg)
 		}
 	}
 }
