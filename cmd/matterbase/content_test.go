@@ -101,38 +101,6 @@ func TestSplitMMDHeader(t *testing.T) {
 	})
 }
 
-func TestExtractMarkdownSection(t *testing.T) {
-	t.Run("simple h2 section", func(t *testing.T) {
-		content := "## Alpha\nSome text.\n## Beta\nOther text.\n"
-		result := extractMarkdownSection(content, 1)
-		if !strings.Contains(result, "## Alpha") || !strings.Contains(result, "Some text.") {
-			t.Errorf("result = %q", result)
-		}
-		if strings.Contains(result, "## Beta") {
-			t.Errorf("result = %q, must not include the next section", result)
-		}
-	})
-
-	t.Run("nested headings stay inside", func(t *testing.T) {
-		content := "## Section\n### Subsection\nDetail.\n## Next Section\n"
-		result := extractMarkdownSection(content, 1)
-		if !strings.Contains(result, "### Subsection") {
-			t.Errorf("result = %q", result)
-		}
-		if strings.Contains(result, "## Next Section") {
-			t.Errorf("result = %q", result)
-		}
-	})
-
-	t.Run("no heading returns full content", func(t *testing.T) {
-		content := "just some text\nno headings here"
-		result := extractMarkdownSection(content, 1)
-		if !strings.Contains(result, "just some text") {
-			t.Errorf("result = %q", result)
-		}
-	})
-}
-
 const sampleDoc = `---
 title: Test Note
 ---
@@ -160,7 +128,7 @@ func sampleBody() string {
 
 func TestExtractSectionForRecord(t *testing.T) {
 	t.Run("matches by id", func(t *testing.T) {
-		result := extractSectionForRecord(sampleBody(), Record{"id": "task-1", "status": "active"}, nil)
+		result := extractSectionForRecord(sampleBody(), Record{"id": "task-1", "status": "active"}, nil, -1)
 		if !strings.Contains(result, "## Tasks") || !strings.Contains(result, "task-1") {
 			t.Errorf("result = %q", result)
 		}
@@ -170,14 +138,14 @@ func TestExtractSectionForRecord(t *testing.T) {
 	})
 
 	t.Run("matches second block", func(t *testing.T) {
-		result := extractSectionForRecord(sampleBody(), Record{"id": "task-2", "status": "done"}, nil)
+		result := extractSectionForRecord(sampleBody(), Record{"id": "task-2", "status": "done"}, nil, -1)
 		if !strings.Contains(result, "## Archive") || !strings.Contains(result, "task-2") {
 			t.Errorf("result = %q", result)
 		}
 	})
 
 	t.Run("no match returns empty", func(t *testing.T) {
-		result := extractSectionForRecord(sampleBody(), Record{"id": "nonexistent"}, nil)
+		result := extractSectionForRecord(sampleBody(), Record{"id": "nonexistent"}, nil, -1)
 		if result != "" {
 			t.Errorf("result = %q, want empty", result)
 		}
@@ -185,14 +153,14 @@ func TestExtractSectionForRecord(t *testing.T) {
 
 	t.Run("frontmatter keys excluded", func(t *testing.T) {
 		result := extractSectionForRecord(sampleBody(),
-			Record{"id": "task-1", "title": "Test Note"}, map[string]bool{"title": true})
+			Record{"id": "task-1", "title": "Test Note"}, map[string]bool{"title": true}, -1)
 		if !strings.Contains(result, "task-1") {
 			t.Errorf("result = %q", result)
 		}
 	})
 
 	t.Run("empty record returns empty", func(t *testing.T) {
-		result := extractSectionForRecord(sampleBody(), Record{}, nil)
+		result := extractSectionForRecord(sampleBody(), Record{}, nil, -1)
 		if result != "" {
 			t.Errorf("result = %q, want empty", result)
 		}
@@ -225,7 +193,43 @@ func TestExtractSectionForRecordWithNumericID(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := "## Five\n\n```yaml\nid: 5\n```\n"
-	if got := extractSectionForRecord(body, rec, map[string]bool{}); !strings.Contains(got, "## Five") {
+	if got := extractSectionForRecord(body, rec, map[string]bool{}, -1); !strings.Contains(got, "## Five") {
 		t.Errorf("section = %q, want the block under ## Five", got)
 	}
 }
+
+// grubber reads only ```yaml, so a record never comes from a ```yml block; a
+// yml fence with the same id is an example and must not be taken for it.
+func TestExtractSectionForRecordSkipsYml(t *testing.T) {
+	body := "## Example\n\n```yml\nid: task-1\n```\n\n## Real\n\n```yaml\nid: task-1\n```\n"
+	result := extractSectionForRecord(body, Record{"id": "task-1"}, nil, -1)
+	if !strings.Contains(result, "## Real") || strings.Contains(result, "## Example") {
+		t.Errorf("result = %q", result)
+	}
+}
+
+// The section is the entry by grubber's rules: heading, prose before the
+// block, the block. Text after the block belongs to no entry.
+func TestExtractSectionForRecordIsTheEntry(t *testing.T) {
+	body := "#### Detail\n\nProse before.\n\n```yaml\nid: d1\n```\n\nText after.\n"
+	got := extractSectionForRecord(body, Record{"id": "d1"}, nil, -1)
+	want := "#### Detail\n\nProse before.\n\n```yaml\nid: d1\n```"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+// grubber's _line finds the block even when two blocks carry the same fields.
+func TestExtractSectionForRecordByLine(t *testing.T) {
+	content := "---\ntitle: x\n---\n\n### A\n\n```yaml\nstatus: open\n```\n\n### B\n\n```yaml\nstatus: open\n```\n"
+	_, body, keys := splitFrontmatter(content, false)
+	offset := strings.Count(content[:len(content)-len(body)], "\n")
+	got := extractSectionForRecord(body, Record{"status": "open", "_line": float64(13)}, keys, offset)
+	if !strings.HasPrefix(got, "### B") {
+		t.Errorf("by _line: %q", got)
+	}
+	if got := extractSectionForRecord(body, Record{"status": "open"}, keys, -1); !strings.HasPrefix(got, "### A") {
+		t.Errorf("by fields, the first match: %q", got)
+	}
+}
+

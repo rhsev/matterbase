@@ -188,8 +188,9 @@ One global mode applies to whichever record is selected, adapted to its
 source type.
 
 1. **whole** shows the full file, rendered via apex (Markdown) or bat (typst).
-2. **compact** shows the frontmatter and the record's YAML block with its
-   surrounding Markdown section.
+2. **compact** shows the frontmatter and the record's entry: its heading, the
+   text before the block, and the block. Where that text starts is decided
+   by grubber's package `entry`, the same rules `commenter` applies.
 3. **record** shows the record's fields as a form.
 
 JSONL records always show the field form, since there is no body to render.

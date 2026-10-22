@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/rhsev/grubber/entry"
 	"math"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -66,33 +66,6 @@ func splitMMDHeader(content string) (string, string) {
 	return strings.Join(mmdLines, "\n"), strings.Join(lines[restStart:], "\n")
 }
 
-var headingRe = regexp.MustCompile(`^(#{1,6})\s`)
-
-// extractMarkdownSection returns the section (nearest heading → next
-// same-level heading) containing the line at targetBlockStart.
-func extractMarkdownSection(content string, targetBlockStart int) string {
-	lines := strings.Split(content, "\n")
-	headingLineIdx, headingLevel := 0, 0
-	for i := targetBlockStart - 1; i >= 0; i-- {
-		if m := headingRe.FindStringSubmatch(lines[i]); m != nil {
-			headingLineIdx = i
-			headingLevel = len(m[1])
-			break
-		}
-	}
-	sectionEndIdx := len(lines)
-	if headingLevel > 0 {
-		stop := regexp.MustCompile(fmt.Sprintf(`^#{1,%d}\s`, headingLevel))
-		for i := headingLineIdx + 1; i < len(lines); i++ {
-			if stop.MatchString(lines[i]) {
-				sectionEndIdx = i
-				break
-			}
-		}
-	}
-	return strings.TrimRightFunc(strings.Join(lines[headingLineIdx:sectionEndIdx], "\n"), unicode.IsSpace)
-}
-
 // valueString renders a decoded field value as it reads in the note. It
 // serves both the record view and the fingerprint matching in
 // extractSectionForRecord, which compares a record decoded from JSON with
@@ -121,16 +94,52 @@ func valueString(v any) string {
 	}
 }
 
-var (
-	yamlFenceOpenRe  = regexp.MustCompile("^```ya?ml\\s*$")
-	yamlFenceCloseRe = regexp.MustCompile("^```\\s*$")
-)
-
-// extractSectionForRecord returns the markdown section containing the
-// YAML block matching record, fingerprinted by id (or, absent an id, by
-// every non-underscore, non-frontmatter field).
-func extractSectionForRecord(body string, record Record, frontmatterKeys map[string]bool) string {
+// extractSectionForRecord returns the entry of the YAML block that holds
+// record: its heading, its prose and the block itself, by the rules of
+// grubber's package entry (the prose is the text between the block and the
+// nearest boundary above it; text after a block belongs to no entry). The
+// block is found by the record's _line where grubber gave one, else by its id,
+// else by every field it carries. lineOffset is the number of file lines
+// before body; a negative one means _line cannot be used.
+func extractSectionForRecord(body string, record Record, frontmatterKeys map[string]bool, lineOffset int) string {
 	lines := strings.Split(body, "\n")
+	blocks := entry.ParseBlocks(lines)
+	b, ok := blockByLine(blocks, record, lineOffset)
+	if !ok {
+		b, ok = blockByFields(blocks, record, frontmatterKeys)
+	}
+	if !ok {
+		return ""
+	}
+	var parts []string
+	if h := headingLineFor(lines, b); h != "" {
+		parts = append(parts, h)
+	}
+	if prose := b.Prose(lines); prose != "" {
+		parts = append(parts, prose)
+	}
+	parts = append(parts, strings.Join(lines[b.Open:b.Close+1], "\n"))
+	return strings.Join(parts, "\n\n")
+}
+
+// blockByLine finds the block whose opening fence is at the record's _line.
+func blockByLine(blocks []entry.Block, record Record, lineOffset int) (entry.Block, bool) {
+	line, ok := record["_line"].(float64)
+	if !ok || lineOffset < 0 {
+		return entry.Block{}, false
+	}
+	for _, b := range blocks {
+		if b.Open+lineOffset+1 == int(line) {
+			return b, true
+		}
+	}
+	return entry.Block{}, false
+}
+
+// blockByFields finds the first block that carries the record's id, or,
+// without an id, every field of the record that is not injected or inherited
+// from the frontmatter.
+func blockByFields(blocks []entry.Block, record Record, frontmatterKeys map[string]bool) (entry.Block, bool) {
 	matchFields := map[string]string{}
 	if id, ok := record["id"]; ok && id != nil && !frontmatterKeys["id"] {
 		matchFields["id"] = valueString(id)
@@ -143,44 +152,43 @@ func extractSectionForRecord(body string, record Record, frontmatterKeys map[str
 		}
 	}
 	if len(matchFields) == 0 {
-		return ""
+		return entry.Block{}, false
 	}
-
-	blockStart := -1
-	i := 0
-	for i < len(lines) {
-		if !yamlFenceOpenRe.MatchString(lines[i]) {
-			i++
+	for _, b := range blocks {
+		if b.Fields == nil {
 			continue
 		}
-		j := i + 1
-		for j < len(lines) && !yamlFenceCloseRe.MatchString(lines[j]) {
-			j++
-		}
-		var blockData map[string]any
-		if err := yaml.Unmarshal([]byte(strings.Join(lines[i+1:j], "\n")), &blockData); err == nil {
-			match := true
-			for k, want := range matchFields {
-				got := ""
-				if v, ok := blockData[k]; ok {
-					got = valueString(v)
-				}
-				if got != want {
-					match = false
-					break
-				}
+		match := true
+		for k, want := range matchFields {
+			got := ""
+			if v, ok := b.Fields[k]; ok {
+				got = valueString(v)
 			}
-			if match {
-				blockStart = i
+			if got != want {
+				match = false
 				break
 			}
 		}
-		i = j + 1
+		if match {
+			return b, true
+		}
 	}
-	if blockStart < 0 {
+	return entry.Block{}, false
+}
+
+// headingLineFor returns the heading line of b's entry as it stands in the
+// note, so the preview keeps its level.
+func headingLineFor(lines []string, b entry.Block) string {
+	if b.Heading == "" {
 		return ""
 	}
-	return extractMarkdownSection(body, blockStart)
+	for i := b.Open - 1; i >= 0; i-- {
+		l := lines[i]
+		if strings.HasPrefix(l, "#") && strings.TrimSpace(strings.TrimRight(strings.TrimSpace(strings.TrimLeft(l, "#")), "#")) == b.Heading {
+			return l
+		}
+	}
+	return ""
 }
 
 // splitFrontmatter splits content into (frontmatterYAML, body, keys).

@@ -108,7 +108,7 @@ The logic lives in files without TUI code. The app model connects them.
 | `pipeline.go`         | The chain: cache replay → DuckDB WHERE → full-text display filter     |
 | `preview.go`          | Type-adaptive rendering in the global mode (whole / compact / record) |
 | `grubber.go`          | grubber subprocess integration, cache build, version gate             |
-| `content.go`          | Frontmatter/MMD parsing, section extraction, apex/bat rendering       |
+| `content.go`          | Frontmatter/MMD parsing, the record's entry, apex/bat rendering      |
 | `config.go`           | YAML config loading and in-session reload                             |
 | `main.go`             | The Bubble Tea model: layout, key handling, pipeline plumbing, CLI    |
 
@@ -177,7 +177,7 @@ according to its source type.
 | Mode      | markdown                            | typst        | jsonl       |
 |-----------|-------------------------------------|--------------|-------------|
 | `whole`   | full file via apex                  | bat          | field form  |
-| `compact` | frontmatter + the record's YAML block with its markdown section | section extraction, else field form | field form |
+| `compact` | frontmatter + the record's entry (heading, prose, block; grubber's package `entry`, block found by `_line`, else id or fields) | entry, else field form | field form |
 | `record`  | field form                          | field form   | field form  |
 
 If a renderer is missing or fails, the next one takes over, in the order apex,

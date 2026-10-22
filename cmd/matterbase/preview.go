@@ -101,7 +101,11 @@ func renderCompact(record Record, path string, apexCfg ApexConfig, mmd bool) str
 	if fm != "" {
 		parts = append(parts, "---\n"+fm+"\n---")
 	}
-	if section := extractSectionForRecord(body, record, fmKeys); section != "" {
+	offset := -1
+	if strings.HasSuffix(content, body) {
+		offset = strings.Count(content[:len(content)-len(body)], "\n")
+	}
+	if section := extractSectionForRecord(body, record, fmKeys, offset); section != "" {
 		parts = append(parts, section)
 	}
 
