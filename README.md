@@ -51,7 +51,7 @@ the [DuckDB](https://duckdb.org) CLI for SQL.
 
 ## Requirements
 
-- [grubber](https://github.com/rhsev/grubber) **≥ 0.19.0**, on `PATH` or
+- [grubber](https://github.com/rhsev/grubber) **≥ 0.20.0**, on `PATH` or
   named in `$GRUBBER`. matterbase checks the version at startup. It scans the
   notes dir once per refresh into a JSONL cache and filters by replaying the
   cache through `grubber --from-jsonl`.

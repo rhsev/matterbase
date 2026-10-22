@@ -232,4 +232,3 @@ func TestExtractSectionForRecordByLine(t *testing.T) {
 		t.Errorf("by fields, the first match: %q", got)
 	}
 }
-
