@@ -81,6 +81,7 @@ matterbase --config path/to/config.yml [PATH]
 
 `PATH` replaces `notes_dir` from the config for this session, and
 `--depth N` replaces `depth`. Both also hold after a config reload (`R`).
+With `PATH`, `grubber_set` is ignored and the yank names the directory.
 
 ## Config
 
