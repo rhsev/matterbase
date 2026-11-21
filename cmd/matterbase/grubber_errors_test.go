@@ -188,3 +188,99 @@ func TestEmptyResultIsNoError(t *testing.T) {
 		t.Errorf("status %q (err %v), want \"0 records\" without error", m.status, m.statusErr)
 	}
 }
+
+// cacheGrubber answers the scan like fakeGrubber, and the replay with one
+// record only if the cache it is pointed at has content: what a query sees
+// depends on whether the scan has written the cache yet.
+func cacheGrubber(t *testing.T, fail bool) {
+	t.Helper()
+	scan := `echo '{"_note_file":"/n/a.md","status":"active"}'`
+	if fail {
+		scan = `echo "cannot read notes dir" >&2; exit 1`
+	}
+	fakeTools(t, map[string]string{"grubber": `case "$*" in
+*--format=jsonl*) ` + scan + ` ;;
+*) if [ -s "$3" ]; then echo '[{"_note_file":"/n/a.md","status":"active"}]'; fi ;;
+esac`})
+	t.Setenv("GRUBBER", "")
+}
+
+// A query started while the scan still runs replays the cache from before
+// the scan. The scan's result is stale by then, but its records must still
+// reach the table: the query runs again on the new cache.
+func TestScanOvertakenByQueryStillReachesTheTable(t *testing.T) {
+	cacheGrubber(t, false)
+	m := newAppModel(&Config{NotesDir: t.TempDir()})
+	t.Cleanup(func() { os.Remove(m.cachePath) })
+
+	scan := m.refreshCmd()
+	query := m.runQueryCmd()
+	early := query().(pipelineDoneMsg) // replays the still empty cache
+	done := scan().(pipelineDoneMsg)
+
+	if cmd := m.finishQuery(early); cmd != nil || m.table.Len() != 0 {
+		t.Fatalf("early query: %d records, follow-up %v", m.table.Len(), cmd != nil)
+	}
+	again := m.finishQuery(done)
+	if again == nil {
+		t.Fatal("the overtaken scan starts no query on the new cache")
+	}
+	m.finishQuery(again().(pipelineDoneMsg))
+	if m.table.Len() != 1 || m.statusErr {
+		t.Errorf("table has %d records (status %q), want the scanned one", m.table.Len(), m.status)
+	}
+}
+
+// The same order of events, with the query's result arriving last: it
+// replayed the old cache and must not replace the newer result.
+func TestQueryOnOldCacheArrivingAfterTheScanIsDropped(t *testing.T) {
+	cacheGrubber(t, false)
+	m := newAppModel(&Config{NotesDir: t.TempDir()})
+	t.Cleanup(func() { os.Remove(m.cachePath) })
+
+	scan := m.refreshCmd()
+	query := m.runQueryCmd()
+	early := query().(pipelineDoneMsg)
+	done := scan().(pipelineDoneMsg)
+
+	m.finishQuery(m.finishQuery(done)().(pipelineDoneMsg))
+	m.finishQuery(early)
+	if m.table.Len() != 1 {
+		t.Errorf("table has %d records, want 1: the old-cache result came through", m.table.Len())
+	}
+}
+
+// A failed scan shows its error even when a query overtook it.
+func TestFailedScanOvertakenByQueryShowsItsError(t *testing.T) {
+	cacheGrubber(t, true)
+	m := newAppModel(&Config{NotesDir: t.TempDir()})
+	t.Cleanup(func() { os.Remove(m.cachePath) })
+
+	scan := m.refreshCmd()
+	query := m.runQueryCmd()
+	early := query().(pipelineDoneMsg)
+	done := scan().(pipelineDoneMsg)
+
+	m.finishQuery(done)
+	m.finishQuery(early)
+	if !m.statusErr || !strings.Contains(m.status, "cannot read notes dir") {
+		t.Errorf("status %q (err %v), want the grubber error", m.status, m.statusErr)
+	}
+}
+
+// The cache is replaced in one step and leaves no temporary file behind.
+func TestWriteFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.jsonl")
+	for _, content := range []string{"first", "second"} {
+		if err := writeFileAtomic(path, []byte(content)); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := os.ReadFile(path); string(got) != content {
+			t.Errorf("cache holds %q, want %q", got, content)
+		}
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Errorf("%d files in the cache directory, want 1", len(entries))
+	}
+}

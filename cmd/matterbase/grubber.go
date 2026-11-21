@@ -165,13 +165,34 @@ func extractToJSONL(notesDir, outPath string, opts ExtractOpts, onError func(str
 		}
 		return false
 	}
-	if err := os.WriteFile(outPath, out, 0o644); err != nil {
+	if err := writeFileAtomic(outPath, out); err != nil {
 		if onError != nil {
 			onError("grubber: " + err.Error())
 		}
 		return false
 	}
 	return true
+}
+
+// writeFileAtomic replaces path in one step. A query may replay the cache
+// while a rescan writes it; it reads the old file or the new one, never
+// half of one.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		os.Remove(tmp.Name())
+	}
+	return err
 }
 
 // queryCachedRecords replays the in-session cache through grubber with

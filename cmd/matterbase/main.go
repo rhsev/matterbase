@@ -249,6 +249,10 @@ type refreshRequestMsg struct{}
 type pipelineDoneMsg struct {
 	gen    int
 	result PipelineResult
+	// scan marks the result of a rescan, scanOK that the rescan wrote a
+	// new cache. A query started while a rescan runs makes the rescan's
+	// result stale, but its cache is the one every later query replays.
+	scan, scanOK bool
 	// fulltextCache is the request's own copy of the full-text file
 	// cache, grown by this run. Requests overlap, so none may write into
 	// the map the model holds; the current result's copy replaces it.
@@ -281,7 +285,7 @@ func (m *appModel) refreshCmd() tea.Cmd {
 		if result.Error == "" {
 			result.Error = errMsg
 		}
-		return pipelineDoneMsg{gen: gen, result: result, fulltextCache: cache}
+		return pipelineDoneMsg{gen: gen, result: result, fulltextCache: cache, scan: true, scanOK: ok}
 	}
 }
 
@@ -302,9 +306,22 @@ func (m *appModel) runQueryCmd() tea.Cmd {
 	}
 }
 
-func (m *appModel) finishQuery(msg pipelineDoneMsg) {
+// finishQuery takes a pipeline result into the table. A result whose
+// generation is stale is dropped, with one exception: a rescan that a
+// query overtook. That query replayed the cache from before the rescan,
+// so its result is out of date too. A rescan that wrote a new cache gets
+// the current query run again on it; one that failed shows its error, as
+// it would have without the query. Either way the generation moves on and
+// the overtaking query's result is dropped when it arrives.
+func (m *appModel) finishQuery(msg pipelineDoneMsg) tea.Cmd {
 	if msg.gen != m.gen {
-		return
+		if !msg.scan {
+			return nil
+		}
+		if msg.scanOK {
+			return m.runQueryCmd()
+		}
+		m.gen++
 	}
 	if msg.fulltextCache != nil {
 		m.fulltextCache = msg.fulltextCache
@@ -327,6 +344,7 @@ func (m *appModel) finishQuery(msg pipelineDoneMsg) {
 		m.statusErr = false
 	}
 	m.updatePreview()
+	return nil
 }
 
 func (m *appModel) updatePreview() {
@@ -369,11 +387,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshCmd()
 
 	case pipelineDoneMsg:
-		m.finishQuery(msg)
+		cmd := m.finishQuery(msg)
 		// New records usually mean a new column set (recordtable
 		// re-fits/re-ranks columns per SetRecords), the header text
 		// itself changes — the same repaint-desync risk as a resize.
-		return m, tea.ClearScreen
+		return m, tea.Batch(cmd, tea.ClearScreen)
 
 	case recordtable.Highlighted:
 		m.updatePreview()
