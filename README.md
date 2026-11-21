@@ -56,8 +56,8 @@ the [DuckDB](https://duckdb.org) CLI for SQL.
   notes dir once per refresh into a JSONL cache and filters by replaying the
   cache through `grubber --from-jsonl`.
 - [duckdb](https://duckdb.org) CLI for the SQL WHERE clause and the filename
-  search, which runs as SQL. The UI runs the same `duckdb` command the yank
-  produces. Without it, presets and full-text still work.
+  search, which runs as SQL. The UI runs the WHERE clause of the yank through
+  the same `duckdb`. Without it, presets and full-text still work.
 - [apex](https://github.com/ttscoff/apex) (optional, for preview rendering)
 - [bat](https://github.com/sharkdp/bat) (optional, for syntax-highlighted
   preview of typst and other text files)
@@ -206,6 +206,11 @@ grubber extract ~/Notes -a --from-jsonl ~/Notes/collections/ --explode binder --
 ```
 
 `Y` copies the command and quits.
+
+The command returns the records of the table. With SQL it ends in DuckDB,
+which prints timestamps its own way: `2026-01-05T10:00:00Z` in the table is
+`2026-01-05 11:00:00+01` in the output, depending on the local time zone.
+The table shows the value of the note.
 
 With `grubber_set: NAME` in the config, the yank shrinks to
 `grubber extract --set NAME …`. The set in grubber's config then holds the

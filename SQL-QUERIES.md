@@ -50,6 +50,10 @@ start > '2026-01-01'
 start BETWEEN '2026-01-01' AND '2026-03-31'
 ```
 
+A clause compares typed values. DuckDB reads `2026-01-05T10:00:00` as a
+timestamp, so `year(start) = 2026` and `start > TIMESTAMP '2026-01-05 12:00'`
+work. The table still shows the value as the note holds it.
+
 ## Combine
 
 ```sql

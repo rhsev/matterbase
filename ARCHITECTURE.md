@@ -161,13 +161,21 @@ After grubber has reduced the record set, the DuckDB CLI applies the SQL WHERE
 clause. It runs as a subprocess, not as an embedded library.
 
 ```sh
-duckdb -json -c "SELECT * FROM read_json_auto('records.json') WHERE <clause>"
+duckdb -json -c "SELECT _matterbase_row FROM read_json_auto('records.json') WHERE <clause>"
 ```
 
 grubber applies the structural filters first, and DuckDB then evaluates the
-SQL on the smaller set. Running the CLI keeps the binary pure Go. The UI and
-the yanked command run the same `duckdb` call, so the table shows what the
-copied command returns.
+SQL on the smaller set. Running the CLI keeps the binary pure Go. The UI
+numbers the records and asks DuckDB only which ones pass. The table then
+shows those records as grubber gave them. The yanked command uses the same
+reader and the same clause with `SELECT *`, so it returns the records of the
+table.
+
+DuckDB reads some strings as typed values and prints them its own way. A
+timestamp with a time zone, such as `_mtime`, comes out in the local zone,
+`10:30` becomes `10:30:00`, and a very large number becomes a string. This
+shows in the output of the yanked command when it ends in DuckDB. The table
+shows the value of the note with and without SQL.
 
 ## Preview Architecture
 
@@ -224,7 +232,7 @@ in-session cache matters more.
 
 **DuckDB as external CLI.** The SQL WHERE clause and the filename search need
 `duckdb` on `PATH`. The binary stays pure Go in return, and UI and yank always
-run the same SQL.
+run the same WHERE clause.
 
 ## Is matterbase a Database?
 
