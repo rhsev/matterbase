@@ -22,7 +22,7 @@ jobs:
       # with the table. Without them those tests are skipped.
       - name: Install grubber
         run: |
-          go install github.com/rhsev/grubber@v0.19.1
+          go install github.com/rhsev/grubber@v0.22.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Install duckdb
         run: |
