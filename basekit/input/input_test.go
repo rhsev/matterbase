@@ -151,3 +151,50 @@ func TestTickFromAnotherInputIsIgnored(t *testing.T) {
 		t.Error("two inputs share an ID")
 	}
 }
+
+func tickOf(cmd tea.Cmd) tickMsg {
+	for _, msg := range runCmds(cmd) {
+		if tick, ok := msg.(tickMsg); ok {
+			return tick
+		}
+	}
+	return tickMsg{}
+}
+
+// Enter within the debounce window reports the value as pending and
+// cancels the tick, so the app hears about the value once.
+func TestEnterBeforeTheDebounceCancelsIt(t *testing.T) {
+	m := New(Config{Debounce: time.Millisecond})
+	m.Focus()
+	tick := tickOf(typeRune(t, &m, 'a'))
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated
+	if sub := cmd().(Submitted); !sub.Pending {
+		t.Error("Submitted.Pending = false, want true: no Debounced has reported the value")
+	}
+	if _, out := m.Update(tick); out != nil {
+		t.Errorf("the tick still fired after Enter: %#v", out())
+	}
+}
+
+// Enter after the debounce has fired reports nothing pending, and so does
+// a second Enter.
+func TestEnterAfterTheDebounceHasNothingPending(t *testing.T) {
+	m := New(Config{Debounce: time.Millisecond})
+	m.Focus()
+	tick := tickOf(typeRune(t, &m, 'a'))
+	updated, out := m.Update(tick)
+	m = updated
+	if _, ok := out().(Debounced); !ok {
+		t.Fatal("expected Debounced")
+	}
+
+	for i := range 2 {
+		updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m = updated
+		if sub := cmd().(Submitted); sub.Pending || sub.Value != "a" {
+			t.Errorf("Enter %d: Submitted = %+v, want value a and nothing pending", i+1, sub)
+		}
+	}
+}

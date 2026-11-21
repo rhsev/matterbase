@@ -51,7 +51,13 @@ type Debounced struct {
 }
 
 // Submitted is emitted immediately on Enter, bypassing the debounce.
-type Submitted struct{ Value string }
+// Pending says the value has changed since the last Debounced: the app
+// has not run a query for it yet. Enter cancels that pending Debounced,
+// so the app hears about the value once.
+type Submitted struct {
+	Value   string
+	Pending bool
+}
 
 // tickMsg carries the input's id: an app forwards every non-key message
 // to all of its inputs, and generations alone collide across inputs.
@@ -71,6 +77,7 @@ type Model struct {
 	cfg      Config
 	width    int
 	gen      int
+	settled  int // gen of the last value a Debounced or Submitted reported
 	debounce time.Duration
 }
 
@@ -99,8 +106,15 @@ func (m Model) Focused() bool   { return m.ti.Focused() }
 func (m Model) Value() string   { return m.ti.Value() }
 
 // SetValue replaces the content without emitting Changed/Debounced — for
-// programmatic resets (e.g. clearing the SQL form's value field).
-func (m *Model) SetValue(v string) { m.ti.SetValue(v) }
+// programmatic resets (e.g. clearing the SQL form's value field). A new
+// value counts as pending: no Debounced will report it, so the next
+// Enter does.
+func (m *Model) SetValue(v string) {
+	if v != m.ti.Value() {
+		m.gen++
+	}
+	m.ti.SetValue(v)
+}
 
 func (m *Model) SetWidth(w int) {
 	m.width = w
@@ -110,13 +124,17 @@ func (m *Model) SetWidth(w int) {
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if tick, ok := msg.(tickMsg); ok {
 		if tick.id == m.id && tick.gen == m.gen {
+			m.settled = m.gen
 			return m, func() tea.Msg { return Debounced{ID: m.id, Value: tick.value} }
 		}
 		return m, nil
 	}
 
 	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyEnter {
-		return m, func() tea.Msg { return Submitted{Value: m.ti.Value()} }
+		sub := Submitted{Value: m.ti.Value(), Pending: m.settled != m.gen}
+		m.gen++ // a tick still on its way is stale now
+		m.settled = m.gen
+		return m, func() tea.Msg { return sub }
 	}
 
 	prev := m.ti.Value()

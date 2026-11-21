@@ -504,8 +504,8 @@ func (m appModel) forwardToInputs(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleSubmitted fires on Enter in any builder text input: it runs the
-// query right away, without waiting for the debounce, and returns focus
-// to the table. The SQL form only does so on success (a built clause);
+// query right away, unless the debounce has already run it for this
+// value, and returns focus to the table. The SQL form only does so on success (a built clause);
 // on failure the user stays put to fix the input.
 func (m appModel) handleSubmitted(msg input.Submitted) (tea.Model, tea.Cmd) {
 	if m.focus == focusFormValue {
@@ -527,12 +527,18 @@ func (m appModel) handleSubmitted(msg input.Submitted) (tea.Model, tea.Cmd) {
 	case focusSQL:
 		m.state.SQLWhere = msg.Value
 		queryCmd = m.runQueryCmd()
+	// Filename and full-text query on their own once typing pauses. Enter
+	// only has to run the query when that has not happened yet.
 	case focusFilename:
 		m.state.FilenameTerm = msg.Value
-		queryCmd = m.runQueryCmd()
+		if msg.Pending {
+			queryCmd = m.runQueryCmd()
+		}
 	case focusFulltext:
 		m.state.FulltextTerm = msg.Value
-		queryCmd = m.runQueryCmd()
+		if msg.Pending {
+			queryCmd = m.runQueryCmd()
+		}
 	}
 	focusCmd := m.setFocus(focusTable)
 	return m, tea.Batch(queryCmd, focusCmd)
@@ -1029,15 +1035,22 @@ func main() {
 
 	m := newAppModel(cfg)
 	m.overrides = overrides
-	defer func() {
-		if m.cachePath != "" {
-			os.Remove(m.cachePath)
-		}
-	}()
-
-	prog := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := prog.Run(); err != nil {
+	err := runWithCache(m.cachePath, func() error {
+		_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+		return err
+	})
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
+}
+
+// runWithCache runs the program and removes the record cache afterwards,
+// also when the program ends with an error (an interrupt, a kill). The
+// caller exits only after this has returned: os.Exit skips deferred calls.
+func runWithCache(cachePath string, run func() error) error {
+	if cachePath != "" {
+		defer os.Remove(cachePath)
+	}
+	return run()
 }
