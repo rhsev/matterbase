@@ -176,6 +176,9 @@ func (m *appModel) applyConfig(cfg *Config) {
 // cliOverrides are the command-line settings that win over the config:
 // the PATH argument and --depth. They are applied at startup and again on
 // every reload (R), which rereads the config file.
+//
+// PATH also drops grubber_set: the set names its own directory, so a yank
+// through the set would return other records than the table shows.
 type cliOverrides struct {
 	notesDir string
 	depth    *int
@@ -184,6 +187,7 @@ type cliOverrides struct {
 func (o cliOverrides) apply(cfg *Config) {
 	if o.notesDir != "" {
 		cfg.NotesDir = o.notesDir
+		cfg.GrubberSet = ""
 	}
 	if o.depth != nil {
 		cfg.Depth = o.depth

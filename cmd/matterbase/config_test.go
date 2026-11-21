@@ -117,3 +117,38 @@ func TestReloadKeepsCommandLineOverrides(t *testing.T) {
 		t.Errorf("depth = %v, want 1", m.depth)
 	}
 }
+
+// With PATH on the command line the yank names that directory, not the
+// config's grubber_set: the set has a directory of its own.
+func TestPathArgumentDropsGrubberSet(t *testing.T) {
+	configDir, cliDir := t.TempDir(), t.TempDir()
+	path := writeConfig(t, "notes_dir: "+configDir+"\ngrubber_set: notes\n")
+	cfg, errMsg := readConfig(path)
+	if errMsg != "" {
+		t.Fatalf("errMsg = %q", errMsg)
+	}
+	overrides := cliOverrides{notesDir: cliDir}
+	overrides.apply(cfg)
+	m := newAppModel(cfg)
+	m.overrides = overrides
+	defer os.Remove(m.cachePath)
+
+	check := func(when string) {
+		t.Helper()
+		cmd := m.buildCommand()
+		if strings.Contains(cmd, "--set") || !strings.Contains(cmd, shellQuote(cliDir)) {
+			t.Errorf("%s: yank = %q, want %s without --set", when, cmd, cliDir)
+		}
+	}
+	check("at startup")
+	next, _ := m.reloadConfig()
+	m = next.(appModel)
+	check("after reload")
+
+	// Without PATH the set stays.
+	cfg, _ = readConfig(path)
+	cliOverrides{}.apply(cfg)
+	if cfg.GrubberSet != "notes" {
+		t.Errorf("grubber_set = %q without PATH, want it kept", cfg.GrubberSet)
+	}
+}
