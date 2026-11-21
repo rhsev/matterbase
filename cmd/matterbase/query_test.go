@@ -267,6 +267,14 @@ func TestBuildClause(t *testing.T) {
 		{"status", "=", "", ""},
 		{"status", "bogus", "x", ""},
 		{"title", "like", "x", "title LIKE '%x%'"},
+		// Only what reads as a number stays bare.
+		{"amount", "=", "-4.5", "amount = -4.5"},
+		{"amount", "=", "1e3", "amount = 1e3"},
+		{"status", "=", "inf", "status = 'inf'"},
+		{"status", "=", "NaN", "status = 'NaN'"},
+		{"status", "=", "Infinity", "status = 'Infinity'"},
+		{"id", "=", "007", "id = '007'"},
+		{"id", "IN", "1_000, 0x10", "id IN ('1_000', '0x10')"},
 	}
 	for _, c := range cases {
 		if got := buildClause(c.field, c.op, c.value); got != c.want {

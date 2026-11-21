@@ -212,11 +212,17 @@ func sqlIdent(field string) string {
 	return `"` + strings.ReplaceAll(field, `"`, `""`) + `"`
 }
 
+// plainNumberRe is a number as a note holds it: digits, an optional
+// fraction and exponent, no leading zeros. strconv.ParseFloat would also
+// take inf, nan and Infinity, which DuckDB reads as column names, and 007,
+// which is more often an id than a seven.
+var plainNumberRe = regexp.MustCompile(`^[+-]?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
+
 // sqlValue renders a scalar: numbers stay bare, everything else is
 // single-quoted.
 func sqlValue(value string) string {
 	v := strings.TrimSpace(value)
-	if _, err := strconv.ParseFloat(v, 64); err == nil {
+	if plainNumberRe.MatchString(v) {
 		return v
 	}
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
