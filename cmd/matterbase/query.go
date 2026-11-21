@@ -283,38 +283,58 @@ func appendClause(sql, clause string) string {
 }
 
 // removeLastClause strips the last top-level AND-clause; a single clause
-// clears to "". Quote- and paren-aware so an AND inside a string literal
-// or an IN (…) list doesn't count as a split point.
+// clears to "". An AND does not split where it belongs to something else:
+// inside a string literal, a quoted identifier or parentheses, or as the
+// AND of a BETWEEN. Any white space may stand around it.
 func removeLastClause(sql string) string {
 	s := strings.TrimSpace(sql)
-	inStr := false
 	depth := 0
+	between := 0 // BETWEENs still waiting for their AND
 	last := -1
 	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case inStr:
-			if c == '\'' {
-				if i+1 < len(s) && s[i+1] == '\'' {
-					i++
-				} else {
-					inStr = false
+		switch c := s[i]; {
+		case c == '\'' || c == '"':
+			// Skip to the closing quote; a doubled quote is an escaped one.
+			for i++; i < len(s); i++ {
+				if s[i] != c {
+					continue
 				}
+				if i+1 < len(s) && s[i+1] == c {
+					i++
+					continue
+				}
+				break
 			}
-		case c == '\'':
-			inStr = true
 		case c == '(':
 			depth++
 		case c == ')':
 			depth--
-		case depth == 0 && i+5 <= len(s) && strings.EqualFold(s[i:i+5], " and "):
-			last = i
+		case isWordByte(c):
+			start := i
+			for i+1 < len(s) && isWordByte(s[i+1]) {
+				i++
+			}
+			if depth != 0 {
+				continue
+			}
+			switch word := s[start : i+1]; {
+			case strings.EqualFold(word, "between"):
+				between++
+			case strings.EqualFold(word, "and") && between > 0:
+				between--
+			case strings.EqualFold(word, "and"):
+				last = start
+			}
 		}
 	}
 	if last < 0 {
 		return ""
 	}
 	return strings.TrimRightFunc(s[:last], unicode.IsSpace)
+}
+
+func isWordByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 0x80
 }
 
 // ---------------------------------------------------------------------------

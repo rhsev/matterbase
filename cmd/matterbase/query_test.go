@@ -316,6 +316,16 @@ func TestRemoveLastClause(t *testing.T) {
 		{"a = 1 and b = 2", "a = 1"},
 		{"name = 'o''brien AND co' AND b = 2", "name = 'o''brien AND co'"},
 		{"  ", ""},
+		// The AND of a BETWEEN is no split point.
+		{"a BETWEEN 1 AND 5", ""},
+		{"x = 1 AND a BETWEEN 1 AND 5", "x = 1"},
+		{"a between 1 and 5 AND b = 2", "a between 1 and 5"},
+		{"a = 1\nAND b = 2", "a = 1"},
+		{"a = 1\tand\tb = 2", "a = 1"},
+		{`"my and col" = 1`, ""},
+		{`"my and col" = 1 AND b = 2`, `"my and col" = 1`},
+		{"brand = 1 AND android = 2", "brand = 1"},
+		{"(a = 1 AND b = 2) AND c = 3", "(a = 1 AND b = 2)"},
 	}
 	for _, c := range cases {
 		if got := removeLastClause(c.sql); got != c.want {
