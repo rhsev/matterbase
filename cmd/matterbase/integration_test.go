@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"testing"
@@ -53,7 +54,7 @@ func TestIntegrationRealGrubberData(t *testing.T) {
 	t.Logf("scanned %d records from %s", len(result.Records), notesDir)
 
 	rec := result.Records[0]
-	title, content := renderPreview(rec, "record", ApexConfig{}, false)
+	title, content := renderPreview(context.Background(), rec, "record", ApexConfig{}, false)
 	if title == "" {
 		t.Error("expected a non-empty preview title")
 	}

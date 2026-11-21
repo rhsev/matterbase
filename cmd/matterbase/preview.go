@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,13 +74,13 @@ func rawWithDimmedFrontmatter(content string, mmd bool) string {
 	return dimStyle.Render("---\n"+fm+"\n---") + "\n\n" + strings.TrimLeft(body, "\n")
 }
 
-func renderWhole(path string, apexCfg ApexConfig, mmd bool) string {
+func renderWhole(ctx context.Context, path string, apexCfg ApexConfig, mmd bool) string {
 	if sourceType(path) == "markdown" {
-		if ansi := renderWithApex(path, apexCfg, nil); ansi != "" {
+		if ansi := renderWithApex(ctx, path, apexCfg, nil); ansi != "" {
 			return ansi
 		}
 	}
-	if bat := renderWithBat(path); bat != "" {
+	if bat := renderWithBat(ctx, path); bat != "" {
 		return bat
 	}
 	data, err := os.ReadFile(path)
@@ -89,7 +90,7 @@ func renderWhole(path string, apexCfg ApexConfig, mmd bool) string {
 	return rawWithDimmedFrontmatter(normalizeNote(string(data)), mmd)
 }
 
-func renderCompact(record Record, path string, apexCfg ApexConfig, mmd bool) string {
+func renderCompact(ctx context.Context, record Record, path string, apexCfg ApexConfig, mmd bool) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "Error reading file: " + err.Error()
@@ -113,31 +114,41 @@ func renderCompact(record Record, path string, apexCfg ApexConfig, mmd bool) str
 	if mdText == "" {
 		return renderRecordFields(record)
 	}
-	if ansi := renderWithApex("", apexCfg, &mdText); ansi != "" {
+	if ansi := renderWithApex(ctx, "", apexCfg, &mdText); ansi != "" {
 		return ansi
 	}
 	return mdText
 }
 
+// previewTitle is the pane's title for a record: its file's name.
+func previewTitle(record Record) string {
+	if path, _ := record["_note_file"].(string); path != "" {
+		return filepath.Base(path)
+	}
+	return "record"
+}
+
+// previewReadsFile reports whether the preview of record in mode reads the
+// note and may start apex or bat. The field view needs neither.
+func previewReadsFile(record Record, mode string) bool {
+	path, _ := record["_note_file"].(string)
+	return path != "" && mode != "record" && sourceType(path) != "jsonl"
+}
+
 // renderPreview renders record in the global mode, adapted to its source
 // type. Returns (title, content) — content is ready to hand to
-// preview.Model.SetContent.
-func renderPreview(record Record, mode string, apexCfg ApexConfig, mmd bool) (string, string) {
-	path, _ := record["_note_file"].(string)
-	stype := sourceType(path)
-	title := "record"
-	if path != "" {
-		title = filepath.Base(path)
-	}
-
-	if stype == "jsonl" || mode == "record" || path == "" {
+// preview.Model.SetContent. Cancelling ctx stops a renderer it started.
+func renderPreview(ctx context.Context, record Record, mode string, apexCfg ApexConfig, mmd bool) (string, string) {
+	title := previewTitle(record)
+	if !previewReadsFile(record, mode) {
 		return title, renderRecordFields(record)
 	}
+	path, _ := record["_note_file"].(string)
 	if _, err := os.Stat(path); err != nil {
 		return title, dimStyle.Render("(file not found)")
 	}
 	if mode == "whole" {
-		return title, renderWhole(path, apexCfg, mmd)
+		return title, renderWhole(ctx, path, apexCfg, mmd)
 	}
-	return title, renderCompact(record, path, apexCfg, mmd)
+	return title, renderCompact(ctx, record, path, apexCfg, mmd)
 }

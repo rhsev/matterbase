@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"maps"
@@ -97,8 +98,12 @@ type appModel struct {
 	focus      focusZone
 	inputFocus frame.InputFocus
 
-	previewMode    string
-	previewVisible bool
+	previewMode string
+	// previewGen counts preview requests; a rendered preview whose
+	// generation is stale is dropped. previewCancel stops the renderer of
+	// the request still running.
+	previewGen    int
+	previewCancel context.CancelFunc
 
 	status    string
 	statusErr bool
@@ -139,7 +144,6 @@ func newAppModel(cfg *Config) appModel {
 	m.filenameIn = input.New(input.Config{Placeholder: "_note_file LIKE …"})
 	m.fulltextIn = input.New(input.Config{Placeholder: "not in yank", Warning: true})
 	m.prev = previewpane.New()
-	m.previewVisible = true
 	m.focus = focusTable
 	m.table.Focus()
 
@@ -343,20 +347,63 @@ func (m *appModel) finishQuery(msg pipelineDoneMsg) tea.Cmd {
 		}
 		m.statusErr = false
 	}
-	m.updatePreview()
-	return nil
+	return m.updatePreview()
 }
 
-func (m *appModel) updatePreview() {
+// previewDoneMsg is a preview rendered in the background.
+type previewDoneMsg struct {
+	gen            int
+	title, content string
+}
+
+// updatePreview brings the preview pane up to the record under the cursor.
+// The field view is rendered right away. A preview that reads the note
+// starts apex or bat, which can take long, so it is rendered in a command
+// and arrives as previewDoneMsg; the pane keeps its content until then. A
+// new request stops the renderer of the one before, so holding a cursor
+// key leaves no queue of renderers behind. A hidden pane renders nothing;
+// showing it (p) asks again.
+func (m *appModel) updatePreview() tea.Cmd {
+	m.previewGen++
+	if m.previewCancel != nil {
+		m.previewCancel()
+		m.previewCancel = nil
+	}
+	if !m.prev.Visible() {
+		return nil
+	}
 	rec, _, ok := m.table.Current()
 	if !ok {
 		m.prev.SetTitle("", "")
 		m.prev.SetContent("")
+		return nil
+	}
+	mode, apex, mmd := m.previewMode, m.apex, m.mmd
+	if !previewReadsFile(rec, mode) {
+		title, content := renderPreview(context.Background(), rec, mode, apex, mmd)
+		m.prev.SetTitle(title, mode)
+		m.prev.SetContent(content)
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.previewCancel = cancel
+	gen := m.previewGen
+	return func() tea.Msg {
+		title, content := renderPreview(ctx, rec, mode, apex, mmd)
+		return previewDoneMsg{gen: gen, title: title, content: content}
+	}
+}
+
+func (m *appModel) finishPreview(msg previewDoneMsg) {
+	if msg.gen != m.previewGen {
 		return
 	}
-	title, content := renderPreview(rec, m.previewMode, m.apex, m.mmd)
-	m.prev.SetTitle(title, m.previewMode)
-	m.prev.SetContent(content)
+	if m.previewCancel != nil {
+		m.previewCancel()
+		m.previewCancel = nil
+	}
+	m.prev.SetTitle(msg.title, m.previewMode)
+	m.prev.SetContent(msg.content)
 }
 
 // ---------------------------------------------------------------------------
@@ -596,15 +643,11 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "m":
 		m.previewMode = nextMode(m.previewMode)
-		m.updatePreview()
-		return m, nil
+		return m, m.updatePreview()
 	case "p":
 		m.prev.Toggle()
 		m.applyLayout()
-		if m.prev.Visible() {
-			m.updatePreview()
-		}
-		return m, nil
+		return m, m.updatePreview()
 	case "r":
 		m.status, m.statusErr = "Refreshed", false
 		return m, m.refreshCmd()

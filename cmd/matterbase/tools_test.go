@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,32 +37,32 @@ func TestRenderWholeFallsBack(t *testing.T) {
 
 	t.Run("apex for markdown", func(t *testing.T) {
 		fakeTools(t, map[string]string{"apex": "echo APEX", "bat": "echo BAT"})
-		if got := renderWhole(md, ApexConfig{}, false); !strings.Contains(got, "APEX") {
+		if got := renderWhole(context.Background(), md, ApexConfig{}, false); !strings.Contains(got, "APEX") {
 			t.Errorf("got %q, want apex output", got)
 		}
 	})
 	t.Run("bat for typst", func(t *testing.T) {
 		fakeTools(t, map[string]string{"apex": "echo APEX", "bat": "echo BAT"})
-		if got := renderWhole(typ, ApexConfig{}, false); !strings.Contains(got, "BAT") {
+		if got := renderWhole(context.Background(), typ, ApexConfig{}, false); !strings.Contains(got, "BAT") {
 			t.Errorf("got %q, want bat output", got)
 		}
 	})
 	t.Run("bat when apex fails", func(t *testing.T) {
 		fakeTools(t, map[string]string{"apex": "exit 1", "bat": "echo BAT"})
-		if got := renderWhole(md, ApexConfig{}, false); !strings.Contains(got, "BAT") {
+		if got := renderWhole(context.Background(), md, ApexConfig{}, false); !strings.Contains(got, "BAT") {
 			t.Errorf("got %q, want bat output", got)
 		}
 	})
 	t.Run("raw text without renderers", func(t *testing.T) {
 		fakeTools(t, nil)
-		got := renderWhole(md, ApexConfig{}, false)
+		got := renderWhole(context.Background(), md, ApexConfig{}, false)
 		if !strings.Contains(got, "title: X") || !strings.Contains(got, "Body text.") {
 			t.Errorf("got %q, want frontmatter and body", got)
 		}
 	})
 	t.Run("error for an unreadable file", func(t *testing.T) {
 		fakeTools(t, nil)
-		got := renderWhole(filepath.Join(t.TempDir(), "gone.md"), ApexConfig{}, false)
+		got := renderWhole(context.Background(), filepath.Join(t.TempDir(), "gone.md"), ApexConfig{}, false)
 		if !strings.HasPrefix(got, "Error reading file") {
 			t.Errorf("got %q", got)
 		}
@@ -71,7 +72,7 @@ func TestRenderWholeFallsBack(t *testing.T) {
 func TestRenderCompactWithoutApexShowsMarkdown(t *testing.T) {
 	fakeTools(t, nil)
 	md := writeFile(t, "n.md", "---\ntitle: X\n---\n\n## Block\n\n```yaml\nid: b1\n```\n\nOther prose.\n")
-	got := renderCompact(Record{"id": "b1"}, md, ApexConfig{}, false)
+	got := renderCompact(context.Background(), Record{"id": "b1"}, md, ApexConfig{}, false)
 	for _, want := range []string{"title: X", "## Block", "id: b1"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("compact preview %q lacks %q", got, want)
@@ -82,7 +83,7 @@ func TestRenderCompactWithoutApexShowsMarkdown(t *testing.T) {
 func TestApexGetsConfiguredFlags(t *testing.T) {
 	fakeTools(t, map[string]string{"apex": `echo "$@"`})
 	md := writeFile(t, "n.md", "x\n")
-	got := renderWithApex(md, ApexConfig{Theme: "nord256", Width: 72, CodeHighlight: "pygments", CodeHighlightTheme: "nord"}, nil)
+	got := renderWithApex(context.Background(), md, ApexConfig{Theme: "nord256", Width: 72, CodeHighlight: "pygments", CodeHighlightTheme: "nord"}, nil)
 	for _, want := range []string{"--theme nord256", "--width 72", "--code-highlight pygments", "--code-highlight-theme nord"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("apex called with %q, missing %q", strings.TrimSpace(got), want)

@@ -228,8 +228,8 @@ func withTermEnv() []string {
 
 // renderWithApex renders path (or tmpContent, written to a .md tempfile
 // when non-nil) via apex. Returns ANSI text, or "" if apex is
-// unavailable or fails.
-func renderWithApex(path string, cfg ApexConfig, tmpContent *string) string {
+// unavailable or fails. Cancelling ctx stops apex.
+func renderWithApex(ctx context.Context, path string, cfg ApexConfig, tmpContent *string) string {
 	renderPath := path
 	if tmpContent != nil {
 		f, err := os.CreateTemp("", "matterbase-*.md")
@@ -256,7 +256,7 @@ func renderWithApex(path string, cfg ApexConfig, tmpContent *string) string {
 	if cfg.Width > 0 {
 		args = append(args, "--width", strconv.Itoa(cfg.Width))
 	}
-	out, err := bkexec.Run(context.Background(), 10*time.Second, withTermEnv(), "apex", args...)
+	out, err := bkexec.Run(ctx, 10*time.Second, withTermEnv(), "apex", args...)
 	if err != nil {
 		return ""
 	}
@@ -264,8 +264,8 @@ func renderWithApex(path string, cfg ApexConfig, tmpContent *string) string {
 }
 
 // renderWithBat syntax-highlights path via bat. Returns ANSI text or "".
-func renderWithBat(path string) string {
-	out, err := bkexec.Run(context.Background(), 5*time.Second, withTermEnv(),
+func renderWithBat(ctx context.Context, path string) string {
+	out, err := bkexec.Run(ctx, 5*time.Second, withTermEnv(),
 		"bat", "--color=always", "--style=plain", "--paging=never", path)
 	if err != nil {
 		return ""
