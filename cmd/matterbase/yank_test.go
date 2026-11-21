@@ -10,7 +10,8 @@ import (
 	"testing"
 )
 
-// The yanked command must return the records the table shows. These tests
+// The yanked command must return the records the table shows. With SQL the
+// yank prints them as DuckDB does, see asDuckDBPrints. These tests
 // run the real chain (grubber scan, cache replay, DuckDB) over
 // testdata/notes, run the yanked command through sh, and compare the two
 // record sets. Skipped without grubber or duckdb.
@@ -101,9 +102,34 @@ func canonical(t *testing.T, recs []Record) []string {
 	return out
 }
 
+// asDuckDBPrints passes records through DuckDB without a clause. With SQL
+// the yank ends in DuckDB, which prints a timestamp such as _mtime its
+// own way. The table shows the records as grubber gave them.
+func asDuckDBPrints(t *testing.T, recs []Record) []Record {
+	t.Helper()
+	if len(recs) == 0 {
+		return recs
+	}
+	path := filepath.Join(t.TempDir(), "table.json")
+	data, err := json.Marshal(recs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return yankRecords(t, `duckdb -json -c "SELECT * FROM read_json_auto('`+path+`')"`)
+}
+
+// assertYankMatchesTable holds the yank to the table: the same records,
+// and the same values once both are printed the same way.
 func assertYankMatchesTable(t *testing.T, m appModel, wantCount int) {
 	t.Helper()
-	table := canonical(t, tableRecords(t, &m))
+	shown := tableRecords(t, &m)
+	if m.state.EffectiveSQL() != "" {
+		shown = asDuckDBPrints(t, shown)
+	}
+	table := canonical(t, shown)
 	command := m.buildCommand()
 	yank := canonical(t, yankRecords(t, command))
 	if len(table) != wantCount {
