@@ -191,22 +191,30 @@ func headingLineFor(lines []string, b entry.Block) string {
 	return ""
 }
 
-// splitFrontmatter splits content into (frontmatterYAML, body, keys).
-// Falls back to MMD header parsing when mmd is set.
+// normalizeNote drops a byte order mark and turns \r\n into \n, the form
+// in which grubber's package entry reads a note's lines.
+func normalizeNote(content string) string {
+	content = strings.TrimPrefix(content, "\ufeff")
+	return strings.ReplaceAll(content, "\r\n", "\n")
+}
+
+// splitFrontmatter splits content into (frontmatterYAML, body, keys). Where
+// the frontmatter ends is grubber's rule (entry.FrontmatterEnd), so the
+// preview cuts a note where the records were cut. content is normalized
+// (normalizeNote). Falls back to MMD header parsing when mmd is set.
 func splitFrontmatter(content string, mmd bool) (string, string, map[string]bool) {
-	if strings.HasPrefix(content, "---") {
-		sections := strings.SplitN(content, "---", 3)
-		if len(sections) >= 3 {
-			fm, body := sections[1], sections[2]
-			keys := map[string]bool{}
-			var fmData map[string]any
-			if err := yaml.Unmarshal([]byte(fm), &fmData); err == nil {
-				for k := range fmData {
-					keys[k] = true
-				}
+	lines := strings.Split(content, "\n")
+	if end := entry.FrontmatterEnd(lines); end >= 0 {
+		fm := strings.Join(lines[1:end], "\n")
+		body := strings.Join(lines[end+1:], "\n")
+		keys := map[string]bool{}
+		var fmData map[string]any
+		if err := yaml.Unmarshal([]byte(fm), &fmData); err == nil {
+			for k := range fmData {
+				keys[k] = true
 			}
-			return strings.Trim(fm, "\n"), body, keys
 		}
+		return strings.Trim(fm, "\n"), body, keys
 	}
 	if mmd {
 		mmdYAML, mmdBody := splitMMDHeader(content)

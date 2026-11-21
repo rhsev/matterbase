@@ -86,7 +86,7 @@ func renderWhole(path string, apexCfg ApexConfig, mmd bool) string {
 	if err != nil {
 		return "Error reading file: " + err.Error()
 	}
-	return rawWithDimmedFrontmatter(string(data), mmd)
+	return rawWithDimmedFrontmatter(normalizeNote(string(data)), mmd)
 }
 
 func renderCompact(record Record, path string, apexCfg ApexConfig, mmd bool) string {
@@ -94,7 +94,7 @@ func renderCompact(record Record, path string, apexCfg ApexConfig, mmd bool) str
 	if err != nil {
 		return "Error reading file: " + err.Error()
 	}
-	content := string(data)
+	content := normalizeNote(string(data))
 
 	var parts []string
 	fm, body, fmKeys := splitFrontmatter(content, mmd)

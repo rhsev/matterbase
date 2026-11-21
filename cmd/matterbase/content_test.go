@@ -40,6 +40,21 @@ func TestSplitFrontmatter(t *testing.T) {
 		}
 	})
 
+	// The closing line is --- alone on its line, as grubber reads it.
+	t.Run("dashes inside a value", func(t *testing.T) {
+		fm, body, keys := splitFrontmatter("---\ntitle: a --- b\nstatus: x\n---\n\nBody.", false)
+		if fm != "title: a --- b\nstatus: x" || body != "\nBody." || !keys["title"] || !keys["status"] {
+			t.Errorf("fm=%q body=%q keys=%v", fm, body, keys)
+		}
+	})
+
+	t.Run("byte order mark and crlf", func(t *testing.T) {
+		fm, body, _ := splitFrontmatter(normalizeNote("\ufeff---\r\ntitle: X\r\n---\r\nBody."), false)
+		if fm != "title: X" || body != "Body." {
+			t.Errorf("fm=%q body=%q", fm, body)
+		}
+	})
+
 	t.Run("no frontmatter", func(t *testing.T) {
 		fm, body, keys := splitFrontmatter("# Just a heading\n", false)
 		if fm != "" || !strings.HasPrefix(body, "# Just") || len(keys) != 0 {
