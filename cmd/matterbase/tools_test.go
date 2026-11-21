@@ -96,10 +96,11 @@ func TestCheckGrubberVersion(t *testing.T) {
 		output string
 		ok     bool
 	}{
-		{"grubber 0.20.0 (Go)", true},
-		{"grubber 0.20.1 (Go)", true},
+		{"grubber 0.22.0 (Go)", true},
+		{"grubber 0.22.1 (Go)", true},
+		{"grubber 0.22.0-3-gabc1234 (Go)", true},
 		{"grubber v1.2.0", true},
-		{"grubber 0.19.1 (Go)", false},
+		{"grubber 0.21.0 (Go)", false},
 		{"grubber dev", false},
 	}
 	for _, c := range cases {
@@ -117,7 +118,7 @@ func TestCheckGrubberVersion(t *testing.T) {
 	}
 
 	custom := filepath.Join(t.TempDir(), "my-grubber")
-	if err := os.WriteFile(custom, []byte("#!/bin/sh\necho 'grubber 0.20.0'\n"), 0o755); err != nil {
+	if err := os.WriteFile(custom, []byte("#!/bin/sh\necho 'grubber 0.22.0'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GRUBBER", custom)

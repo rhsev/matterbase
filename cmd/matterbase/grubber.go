@@ -20,8 +20,11 @@ import (
 // minGrubberVersion: --explode (0.14) for the collection index, a stable
 // record order (0.16), filter values and merge keys compared in NFC (0.19),
 // so a binder typed in NFC matches one stored in NFD, and _line (0.20), so
-// the preview finds a record's block by its line.
-var minGrubberVersion = [3]int{0, 20, 0}
+// the preview finds a record's block by its line. 0.22 is the version of
+// the package entry in go.mod: the preview reads frontmatter and blocks
+// with its rules, and the records come from the binary. Keep the two on
+// one version.
+var minGrubberVersion = [3]int{0, 22, 0}
 
 // The (id, binder) identity of fileregister collection records, and the
 // array field exploded into per-membership rows before the merge.
