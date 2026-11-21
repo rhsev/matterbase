@@ -177,7 +177,7 @@ var sqlFormOperators = func() map[string]bool {
 
 var simpleIdentRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// sqlKeywords are the DuckDB keywords (as of 1.5) that cannot stand as a
+// sqlKeywords are the DuckDB keywords (as of 2.0) that cannot stand as a
 // bare column name: they fail to parse, or, like true, false and null,
 // parse as a value.
 var sqlKeywords = func() map[string]bool {
