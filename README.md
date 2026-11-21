@@ -87,7 +87,7 @@ With `PATH`, `grubber_set` is ignored and the yank names the directory.
 
 ```yaml
 notes_dir: ~/Notes/Work        # directory of record sources
-editor: hx                     # editor command
+editor: hx                     # editor command, arguments allowed ("code -w")
 apex_theme: nord256            # apex theme name (optional)
 apex_width: 80                 # apex --width value (optional)
 apex_code_highlight: pygments  # apex --code-highlight tool (optional)
