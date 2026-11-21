@@ -62,10 +62,29 @@ func TestSplitFrontmatter(t *testing.T) {
 		}
 	})
 
+	// The keys are the field names grubber gives the records: lowercase,
+	// blanks as underscores.
 	t.Run("mmd header", func(t *testing.T) {
-		fm, body, keys := splitFrontmatter("Title: X\n\nBody.", true)
-		if !strings.Contains(fm, "Title: X") || !keys["Title"] || !strings.Contains(body, "Body.") {
+		fm, body, keys := splitFrontmatter("Title: X\nDue Date: 2026-01-01\n\nBody.", true)
+		if fm != "Title: X\nDue Date: 2026-01-01" || body != "Body." || !keys["title"] || !keys["due_date"] || len(keys) != 2 {
 			t.Errorf("fm=%q body=%q keys=%v", fm, body, keys)
+		}
+	})
+
+	// As in grubber, one line that is no key line means there is no header.
+	t.Run("mmd header with a plain line", func(t *testing.T) {
+		content := "Title: X\nThis is not a key line\n\nBody."
+		fm, body, keys := splitFrontmatter(content, true)
+		if fm != "" || body != content || len(keys) != 0 {
+			t.Errorf("fm=%q body=%q keys=%v", fm, body, keys)
+		}
+	})
+
+	t.Run("mmd, no header", func(t *testing.T) {
+		content := "# Heading\n\nSome body text."
+		fm, body, _ := splitFrontmatter(content, true)
+		if fm != "" || body != content {
+			t.Errorf("fm=%q body=%q", fm, body)
 		}
 	})
 
@@ -73,45 +92,6 @@ func TestSplitFrontmatter(t *testing.T) {
 		fm, _, _ := splitFrontmatter("Title: X\n\nBody.", false)
 		if fm != "" {
 			t.Errorf("fm = %q, want empty", fm)
-		}
-	})
-}
-
-func TestSplitMMDHeader(t *testing.T) {
-	t.Run("no header", func(t *testing.T) {
-		content := "# Heading\n\nSome body text."
-		y, body := splitMMDHeader(content)
-		if y != "" || body != content {
-			t.Errorf("y=%q body=%q", y, body)
-		}
-	})
-
-	t.Run("simple header", func(t *testing.T) {
-		content := "Title: My Note\nDate: 2025-01-01\n\nBody here."
-		y, body := splitMMDHeader(content)
-		if !strings.Contains(y, "Title: My Note") || !strings.Contains(y, "Date: 2025-01-01") {
-			t.Errorf("y = %q", y)
-		}
-		if body != "Body here." {
-			t.Errorf("body = %q", body)
-		}
-	})
-
-	t.Run("stops at non key line", func(t *testing.T) {
-		content := "Title: My Note\nThis is not a key line\n\nBody."
-		y, body := splitMMDHeader(content)
-		if y != "Title: My Note" {
-			t.Errorf("y = %q", y)
-		}
-		if !strings.Contains(body, "This is not a key line") {
-			t.Errorf("body = %q", body)
-		}
-	})
-
-	t.Run("empty string", func(t *testing.T) {
-		y, body := splitMMDHeader("")
-		if y != "" || body != "" {
-			t.Errorf("y=%q body=%q", y, body)
 		}
 	})
 }

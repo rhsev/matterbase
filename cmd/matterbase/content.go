@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -38,32 +37,6 @@ func sourceType(path string) string {
 	default:
 		return "other"
 	}
-}
-
-var mmdKeyRe = regexp.MustCompile(`^[\w. -]+\s*:`)
-
-// splitMMDHeader returns (yamlLines, body) if content starts with MMD
-// key: value pairs, or ("", content) if no MMD header is found.
-func splitMMDHeader(content string) (string, string) {
-	lines := strings.Split(content, "\n")
-	var mmdLines []string
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			break
-		}
-		if !mmdKeyRe.MatchString(line) {
-			break
-		}
-		mmdLines = append(mmdLines, line)
-	}
-	if len(mmdLines) == 0 {
-		return "", content
-	}
-	restStart := len(mmdLines)
-	if restStart < len(lines) && strings.TrimSpace(lines[restStart]) == "" {
-		restStart++
-	}
-	return strings.Join(mmdLines, "\n"), strings.Join(lines[restStart:], "\n")
 }
 
 // valueString renders a decoded field value as it reads in the note. It
@@ -198,37 +171,31 @@ func normalizeNote(content string) string {
 	return strings.ReplaceAll(content, "\r\n", "\n")
 }
 
-// splitFrontmatter splits content into (frontmatterYAML, body, keys). Where
-// the frontmatter ends is grubber's rule (entry.FrontmatterEnd), so the
-// preview cuts a note where the records were cut. content is normalized
-// (normalizeNote). Falls back to MMD header parsing when mmd is set.
+// splitFrontmatter splits content into (frontmatter text, body, keys): YAML
+// frontmatter, or with mmd a MultiMarkdown header. Where either ends, and
+// what the header's keys are called, is grubber's rule (package entry), so
+// the preview cuts a note where the records were cut and knows the fields
+// they inherited. content is normalized (normalizeNote).
 func splitFrontmatter(content string, mmd bool) (string, string, map[string]bool) {
-	lines := strings.Split(content, "\n")
-	if end := entry.FrontmatterEnd(lines); end >= 0 {
-		fm := strings.Join(lines[1:end], "\n")
-		body := strings.Join(lines[end+1:], "\n")
-		keys := map[string]bool{}
+	keys := map[string]bool{}
+	if fm, body, ok := entry.Frontmatter([]byte(content)); ok {
 		var fmData map[string]any
-		if err := yaml.Unmarshal([]byte(fm), &fmData); err == nil {
+		if err := yaml.Unmarshal(fm, &fmData); err == nil {
 			for k := range fmData {
 				keys[k] = true
 			}
 		}
-		return strings.Trim(fm, "\n"), body, keys
+		return strings.Trim(string(fm), "\n"), string(body), keys
 	}
 	if mmd {
-		mmdYAML, mmdBody := splitMMDHeader(content)
-		if mmdYAML != "" {
-			keys := map[string]bool{}
-			for _, line := range strings.Split(mmdYAML, "\n") {
-				if idx := strings.Index(line, ":"); idx >= 0 {
-					keys[strings.TrimSpace(line[:idx])] = true
-				}
+		if meta, header, body := entry.MMDHeader(content); len(meta) > 0 {
+			for k := range meta {
+				keys[k] = true
 			}
-			return mmdYAML, mmdBody, keys
+			return header, body, keys
 		}
 	}
-	return "", content, map[string]bool{}
+	return "", content, keys
 }
 
 // ApexConfig mirrors matterbase's apex_* config keys.
