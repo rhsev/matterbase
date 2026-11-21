@@ -2,6 +2,8 @@ package exec
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -73,5 +75,76 @@ func TestCopyErrorsWhenNoToolFound(t *testing.T) {
 	t.Setenv("WAYLAND_DISPLAY", "")
 	if err := Copy("test"); err == nil {
 		t.Error("expected an error when no clipboard tool is on PATH")
+	}
+}
+
+func TestEditorArgv(t *testing.T) {
+	cases := []struct {
+		editor string
+		want   []string
+	}{
+		{"sh", []string{"sh"}},
+		{"sh -c", []string{"sh", "-c"}},
+		{"  definitely-not-a-real-binary-xyz  --wait ", []string{"definitely-not-a-real-binary-xyz", "--wait"}},
+		{"", nil},
+		{"   ", nil},
+	}
+	for _, c := range cases {
+		got := editorArgv(c.editor)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("editorArgv(%q) = %q, want %q", c.editor, got, c.want)
+		}
+	}
+}
+
+// A program whose path holds a blank is one program, not two words.
+func TestEditorArgvKeepsAPathWithBlanks(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "My Editor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prog := filepath.Join(dir, "edit")
+	if err := os.WriteFile(prog, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := editorArgv(prog); len(got) != 1 || got[0] != prog {
+		t.Errorf("editorArgv(%q) = %q, want it whole", prog, got)
+	}
+}
+
+func TestOpenEditorWithoutEditorReportsIt(t *testing.T) {
+	msg := OpenEditor(" ", "/tmp/x.md")()
+	if closed, ok := msg.(EditorClosed); !ok || closed.Err == nil {
+		t.Errorf("got %#v, want EditorClosed with an error", msg)
+	}
+}
+
+// Inside tmux the editor's arguments reach the new window as words of
+// their own, and a failing launch comes back as the error.
+func TestOpenEditorInTmuxPassesArgumentsAndErrors(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "args")
+	script := "#!/bin/sh\nfor a in \"$@\"; do echo \"$a\" >> " + log + "; done\n"
+	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("ZELLIJ", "")
+	t.Setenv("TMUX", "1")
+
+	if closed := OpenEditor("code -w", "/n/a b.md")().(EditorClosed); closed.Err != nil {
+		t.Fatalf("Err = %v", closed.Err)
+	}
+	got, _ := os.ReadFile(log)
+	if want := "new-window\ncode\n-w\n/n/a b.md\n"; string(got) != want {
+		t.Errorf("tmux got %q, want %q", got, want)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "tmux"), []byte("#!/bin/sh\necho 'no server' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	closed := OpenEditor("code -w", "/n/a.md")().(EditorClosed)
+	if closed.Err == nil || !strings.Contains(closed.Err.Error(), "no server") {
+		t.Errorf("Err = %v, want tmux's message", closed.Err)
 	}
 }

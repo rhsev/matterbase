@@ -394,13 +394,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, tea.ClearScreen)
 
 	case recordtable.Highlighted:
-		m.updatePreview()
+		return m, m.updatePreview()
+
+	case previewDoneMsg:
+		m.finishPreview(msg)
 		return m, nil
 
 	case recordtable.Selected:
 		return m, m.openEditorCmd()
 
 	case bkexec.EditorClosed:
+		if msg.Err != nil {
+			m.status, m.statusErr = "editor: "+msg.Err.Error(), true
+		}
 		return m, nil
 
 	case togglelist.Toggled:
@@ -672,6 +678,7 @@ func (m *appModel) openEditorCmd() tea.Cmd {
 		return nil
 	}
 	if _, err := os.Stat(path); err != nil {
+		m.status, m.statusErr = "file not found: "+path, true
 		return nil
 	}
 	return bkexec.OpenEditor(m.editor, path)

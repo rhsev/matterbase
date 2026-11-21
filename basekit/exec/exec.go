@@ -103,29 +103,49 @@ func Copy(text string) error {
 }
 
 // EditorClosed is emitted once the editor opened via OpenEditor returns
-// control — via a suspended Bubble Tea program, or a fire-and-forget
-// zellij/tmux launch (Err is always nil in the latter case: the pane's
-// exit is not observed).
+// control: via a suspended Bubble Tea program, or a zellij/tmux launch. In
+// the latter case the pane's exit is not observed, so Err only says whether
+// the pane could be opened.
 type EditorClosed struct{ Err error }
 
-// OpenEditor returns a tea.Cmd that opens path in editor. Inside zellij
-// or tmux it spawns a new pane/window and returns immediately, so the
-// TUI keeps running underneath. Otherwise it suspends the program via
-// tea.ExecProcess so the editor gets the terminal.
+// editorArgv splits an editor setting like "code -w" into program and
+// arguments. A setting that names a program as it stands, blanks in its
+// path included, is taken whole.
+func editorArgv(editor string) []string {
+	editor = strings.TrimSpace(editor)
+	if editor == "" {
+		return nil
+	}
+	if _, err := osexec.LookPath(editor); err == nil {
+		return []string{editor}
+	}
+	return strings.Fields(editor)
+}
+
+// OpenEditor returns a tea.Cmd that opens path in editor, which may carry
+// arguments ("code -w"). Inside zellij or tmux it spawns a new pane/window
+// and returns immediately, so the TUI keeps running underneath. Otherwise
+// it suspends the program via tea.ExecProcess so the editor gets the
+// terminal. A start that fails comes back in EditorClosed.Err.
 func OpenEditor(editor, path string) tea.Cmd {
+	argv := editorArgv(editor)
+	if len(argv) == 0 {
+		return func() tea.Msg { return EditorClosed{Err: errors.New("no editor set")} }
+	}
+	argv = append(argv, path)
 	switch {
 	case os.Getenv("ZELLIJ") != "":
 		return func() tea.Msg {
-			_, _ = Run(context.Background(), DefaultTimeout, nil, "zellij", "run", "-f", "--", editor, path)
-			return EditorClosed{}
+			_, err := Run(context.Background(), DefaultTimeout, nil, "zellij", append([]string{"run", "-f", "--"}, argv...)...)
+			return EditorClosed{Err: err}
 		}
 	case os.Getenv("TMUX") != "":
 		return func() tea.Msg {
-			_, _ = Run(context.Background(), DefaultTimeout, nil, "tmux", "new-window", editor, path)
-			return EditorClosed{}
+			_, err := Run(context.Background(), DefaultTimeout, nil, "tmux", append([]string{"new-window"}, argv...)...)
+			return EditorClosed{Err: err}
 		}
 	default:
-		cmd := osexec.Command(editor, path)
+		cmd := osexec.Command(argv[0], argv[1:]...)
 		return tea.ExecProcess(cmd, func(err error) tea.Msg {
 			return EditorClosed{Err: err}
 		})
