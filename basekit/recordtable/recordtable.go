@@ -7,7 +7,9 @@ package recordtable
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -341,15 +343,37 @@ func inferColumns(recs []Record, explicit []string) []string {
 }
 
 // cellString renders a field value for a table cell: nil becomes empty,
-// everything else goes through fmt. Newlines are
-// flattened so multiline YAML values can't break the row layout.
+// everything else goes through fmt. Numbers are written out: records come
+// from JSON, where every number is a float64, and fmt would show 1500000
+// as 1.5e+06. Newlines are flattened so multiline YAML values can't break
+// the row layout.
 func cellString(v any) string {
-	if v == nil {
+	var s string
+	switch x := v.(type) {
+	case nil:
 		return ""
+	case float64:
+		return numberString(x)
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = cellString(e)
+		}
+		s = "[" + strings.Join(parts, " ") + "]"
+	default:
+		s = fmt.Sprintf("%v", v)
 	}
-	s := fmt.Sprintf("%v", v)
 	if strings.ContainsRune(s, '\n') {
 		s = strings.Join(strings.Fields(s), " ")
 	}
 	return s
+}
+
+// numberString writes a whole number without exponent and every other
+// number in its shortest form.
+func numberString(x float64) string {
+	if x == math.Trunc(x) && math.Abs(x) < 1e15 {
+		return strconv.FormatInt(int64(x), 10)
+	}
+	return strconv.FormatFloat(x, 'g', -1, 64)
 }

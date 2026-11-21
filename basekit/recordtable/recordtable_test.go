@@ -44,6 +44,12 @@ func TestCellString(t *testing.T) {
 		{true, "true"},
 		{[]any{"a", "b"}, "[a b]"},
 		{"line one\nline two", "line one line two"},
+		// JSON numbers arrive as float64; fmt alone would print 1.5e+06.
+		{float64(1500000), "1500000"},
+		{float64(20261119), "20261119"},
+		{float64(-3), "-3"},
+		{1.25, "1.25"},
+		{[]any{float64(2000000), "b"}, "[2000000 b]"},
 	}
 	for _, c := range cases {
 		if got := cellString(c.in); got != c.want {
